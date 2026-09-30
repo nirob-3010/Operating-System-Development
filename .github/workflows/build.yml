@@ -1,0 +1,33 @@
+name: Build NSK OS
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc gcc-multilib binutils grub-pc-bin grub-common xorriso make
+
+      - name: Build NSK OS
+        run: make
+
+      - name: Verify
+        run: |
+          test -f build/NSK-OS.iso
+          file build/NSK-OS.iso
+          ls -lh build/NSK-OS.iso
+
+      - name: Upload ISO
+        uses: actions/upload-artifact@v4
+        with:
+          name: NSK-OS-v0.3
+          path: build/NSK-OS.iso
+          if-no-files-found: error
