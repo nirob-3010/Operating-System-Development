@@ -1,11 +1,18 @@
-CC=gcc
-LD=ld
+AS      = as
+CC      = gcc
+LD      = ld
+GRUB    = grub-mkrescue
 
-CFLAGS=-m32 -ffreestanding -fno-pie -fno-stack-protector -O2 -Wall -Wextra
-LDFLAGS=-m elf_i386 -T kernel/linker.ld
+CFLAGS  = -m32 -ffreestanding -fno-pie -fno-stack-protector -O2 -Wall -Wextra
+LDFLAGS = -m elf_i386 -T kernel/linker.ld
 
-BUILD=build
-ISO=$(BUILD)/NSK-OS.iso
+BUILD   = build
+ISO_DIR = $(BUILD)/iso
+
+KERNEL  = $(BUILD)/kernel.bin
+ISO     = $(BUILD)/NSK-OS.iso
+
+.PHONY: all clean
 
 all: $(ISO)
 
@@ -13,21 +20,19 @@ $(BUILD):
 	mkdir -p $(BUILD)
 
 $(BUILD)/boot.o: boot/boot.s | $(BUILD)
-	as --32 $< -o $@
+	$(AS) --32 $< -o $@
 
 $(BUILD)/kernel.o: kernel/kernel.c | $(BUILD)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILD)/kernel.bin: $(BUILD)/boot.o $(BUILD)/kernel.o kernel/linker.ld | $(BUILD)
-	$(LD) $(LDFLAGS) -o $@ $(BUILD)/boot.o $(BUILD)/kernel.o
+$(KERNEL): $(BUILD)/boot.o $(BUILD)/kernel.o
+	$(LD) $(LDFLAGS) -o $@ $^
 
-$(ISO): $(BUILD)/kernel.bin
-	mkdir -p $(BUILD)/iso/boot/grub
-	cp $(BUILD)/kernel.bin $(BUILD)/iso/boot/kernel.bin
-	cp boot/grub.cfg $(BUILD)/iso/boot/grub/grub.cfg
-	grub-mkrescue -o $@ $(BUILD)/iso
+$(ISO): $(KERNEL) boot/grub.cfg
+	mkdir -p $(ISO_DIR)/boot/grub
+	cp $(KERNEL) $(ISO_DIR)/boot/kernel.bin
+	cp boot/grub.cfg $(ISO_DIR)/boot/grub/grub.cfg
+	$(GRUB) -o $@ $(ISO_DIR)
 
 clean:
 	rm -rf $(BUILD)
-
-.PHONY: all clean
