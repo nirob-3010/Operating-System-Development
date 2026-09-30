@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include "wallpaper.h"
 
 /*
  * NSK OS v0.4 framebuffer desktop
@@ -271,15 +272,29 @@ static void window_click(int x, int y) {
         return;
     }
 
-    /* Dock launchers. */
-    if (y >= (int)fb.height - 100 && y <= (int)fb.height - 10) {
-        int dx = ((int)fb.width - 360) / 2;
+    /* Desktop shortcuts. */
+    if (x >= 20 && x < 105 && y >= 65 && y < 145) {
+        wins[0].open = 1;
+        wins[0].minimized = 0;
+        focused = 0;
+        return;
+    }
+    if (x >= 20 && x < 105 && y >= 145 && y < 225) {
+        wins[0].open = 1;
+        wins[0].minimized = 0;
+        focused = 0;
+        return;
+    }
 
-        if (x >= dx + 18 && x < dx + 62) {
+    /* Dock launchers. */
+    if (y >= (int)fb.height - 100 && y <= (int)fb.height - 8) {
+        int dx = ((int)fb.width - 390) / 2;
+
+        if (x >= dx + 12 && x < dx + 60) {
             wins[0].open = 1;
             wins[0].minimized = 0;
             focused = 0;
-        } else if (x >= dx + 84 && x < dx + 128) {
+        } else if (x >= dx + 70 && x < dx + 118) {
             wins[1].open = 1;
             wins[1].minimized = 0;
             focused = 1;
@@ -342,67 +357,131 @@ static void mouse_poll(void) {
 
 /* ---------- Desktop ---------- */
 
+static void wallpaper_draw(void) {
+    const uint16_t *src = (const uint16_t *)wallpaper_rgb565_start;
+    for (uint32_t y = 0; y < fb.height; ++y) {
+        uint32_t sy = (y * WALL_H) / fb.height;
+        for (uint32_t x = 0; x < fb.width; ++x) {
+            uint32_t sx = (x * WALL_W) / fb.width;
+            uint16_t v = src[sy * WALL_W + sx];
+            uint32_t r = ((v >> 11) & 31) << 3;
+            uint32_t g = ((v >> 5) & 63) << 2;
+            uint32_t b = (v & 31) << 3;
+            putpixel((int)x, (int)y, RGB(r,g,b));
+        }
+    }
+}
+
+static void panel(int x, int y, int w, int h, uint32_t c) {
+    rect(x, y, w, h, c);
+    frame(x, y, w, h, RGB(205,215,230));
+}
+
+static void desktop_icon(int x, int y, const char *label, uint32_t c, char letter) {
+    rect(x+10, y, 42, 36, c);
+    rect(x+16, y+36, 30, 4, c);
+    text(x+23, y+10, &letter, RGB(255,255,255), 2);
+    text(x, y+50, label, RGB(30,45,65), 1);
+}
+
 static void cursor_draw(void) {
     int x = (int)mouse_x;
     int y = (int)mouse_y;
+    /* simple high-contrast arrow */
+    for (int i = 0; i < 15; ++i) {
+        rect(x, y+i, 2, 2, RGB(255,255,255));
+        if (i < 9) rect(x+i, y+i, 2, 2, RGB(255,255,255));
+    }
+    for (int i = 0; i < 7; ++i)
+        rect(x+i, y+10, 2, 2, RGB(35,45,60));
+}
 
-    for (int i = 0; i < 14; ++i)
-        rect(x, y + i, 2, 2, RGB(255,255,255));
-
-    for (int i = 0; i < 8; ++i)
-        rect(x + i, y + 11, 2, 1, RGB(255,255,255));
+static void dock_icon(int x, int y, uint32_t c, char letter) {
+    rect(x, y, 48, 48, c);
+    frame(x, y, 48, 48, RGB(255,255,255));
+    text(x+15, y+14, &letter, RGB(255,255,255), 2);
 }
 
 static void dock(void) {
-    int dw = 360, dh = 72;
+    int dw = 390, dh = 68;
     int dx = ((int)fb.width - dw) / 2;
-    int dy = (int)fb.height - 88;
+    int dy = (int)fb.height - 86;
 
-    rect(dx, dy, dw, dh, RGB(235,238,245));
-    frame(dx, dy, dw, dh, RGB(160,166,180));
+    panel(dx, dy, dw, dh, RGB(241,245,252));
+    dock_icon(dx+12,  dy+10, RGB(50,130,235), 'F');
+    dock_icon(dx+70,  dy+10, RGB(55,185,115), 'T');
+    dock_icon(dx+128, dy+10, RGB(70,80,100), 'S');
+    dock_icon(dx+186, dy+10, RGB(120,135,160), 'A');
+    dock_icon(dx+244, dy+10, RGB(235,170,65), 'N');
+    dock_icon(dx+302, dy+10, RGB(90,105,125), 'P');
+}
 
-    rect(dx+18,  dy+14, 44, 44, RGB(65,145,235));
-    rect(dx+84,  dy+14, 44, 44, RGB(75,180,110));
-    rect(dx+150, dy+14, 44, 44, RGB(45,48,55));
-    rect(dx+216, dy+14, 44, 44, RGB(125,130,140));
-    rect(dx+282, dy+14, 44, 44, RGB(215,95,90));
-
-    text(dx+28,  dy+27, "N", RGB(255,255,255), 2);
-    text(dx+94,  dy+27, "F", RGB(255,255,255), 2);
-    text(dx+160, dy+27, "T", RGB(255,255,255), 2);
-    text(dx+226, dy+27, "S", RGB(255,255,255), 2);
-    text(dx+292, dy+27, "A", RGB(255,255,255), 2);
+static void topbar(void) {
+    rect(0, 0, fb.width, 36, RGB(245,248,253));
+    rect(0, 35, fb.width, 1, RGB(205,214,228));
+    text(15, 10, "NSK OS", RGB(28,38,55), 2);
+    text(110, 10, "FILES", RGB(65,75,90), 1);
+    text(155, 10, "EDIT", RGB(65,75,90), 1);
+    text(198, 10, "VIEW", RGB(65,75,90), 1);
+    text((int)fb.width - 150, 10, "WIFI", RGB(55,70,90), 1);
+    text((int)fb.width - 95, 10, "BATTERY", RGB(55,70,90), 1);
+    text((int)fb.width - 42, 10, "100", RGB(35,45,60), 1);
 }
 
 static void draw_window(window_t *w) {
     if (!w->open || w->minimized) return;
 
-    rect(w->x+7, w->y+7, w->w, w->h, RGB(18,22,30));
-    rect(w->x, w->y, w->w, w->h, RGB(248,249,252));
+    rect(w->x+6, w->y+8, w->w, w->h, RGB(95,110,130));
+    panel(w->x, w->y, w->w, w->h, RGB(248,250,253));
 
-    rect(w->x, w->y, w->w, 32, RGB(232,234,240));
-    frame(w->x, w->y, w->w, w->h, RGB(155,160,172));
+    rect(w->x, w->y, w->w, 34, RGB(238,243,250));
+    rect(w->x, w->y+33, w->w, 1, RGB(210,218,230));
 
-    rect(w->x+12, w->y+11, 10, 10, RGB(235,80,80));
-    rect(w->x+30, w->y+11, 10, 10, RGB(240,185,65));
-    rect(w->x+48, w->y+11, 10, 10, RGB(70,190,100));
+    rect(w->x+12, w->y+12, 10, 10, RGB(235,85,85));
+    rect(w->x+30, w->y+12, 10, 10, RGB(242,190,70));
+    rect(w->x+48, w->y+12, 10, 10, RGB(75,195,105));
+    text(w->x+78, w->y+10, w->title, RGB(40,50,65), 2);
+}
 
-    text(w->x+78, w->y+10, w->title, RGB(55,58,66), 2);
+static void file_manager_content(void) {
+    if (!wins[0].open || wins[0].minimized) return;
+    window_t *w = &wins[0];
+    rect(w->x+1, w->y+34, 145, w->h-35, RGB(240,244,249));
+    text(w->x+18, w->y+58, "HOME", RGB(40,75,125), 2);
+    text(w->x+18, w->y+88, "DOCUMENTS", RGB(65,75,90), 1);
+    text(w->x+18, w->y+112, "PICTURES", RGB(65,75,90), 1);
+    text(w->x+18, w->y+136, "DOWNLOADS", RGB(65,75,90), 1);
+    text(w->x+18, w->y+160, "SETTINGS", RGB(65,75,90), 1);
+
+    int sx = w->x + 185, sy = w->y + 70;
+    const char *names[] = {"DESKTOP", "FILES", "APPS", "SYSTEM"};
+    uint32_t colors[] = {RGB(65,145,235), RGB(75,175,110), RGB(235,175,65), RGB(125,135,155)};
+    for (int i=0; i<4; ++i) {
+        int xx = sx + (i%2)*110, yy = sy + (i/2)*105;
+        rect(xx, yy, 58, 48, colors[i]);
+        text(xx+18, yy+14, "F", RGB(255,255,255), 2);
+        text(xx-2, yy+58, names[i], RGB(45,55,70), 1);
+    }
+}
+
+static void terminal_content(void) {
+    if (!wins[1].open || wins[1].minimized) return;
+    window_t *w = &wins[1];
+    rect(w->x+14, w->y+50, w->w-28, w->h-64, RGB(245,248,252));
+    text(w->x+28, w->y+68, "NSK OS TERMINAL", RGB(35,95,180), 2);
+    text(w->x+28, w->y+96, "NSK@OS:~$", RGB(40,145,90), 1);
+    if (typed_len)
+        text(w->x+95, w->y+96, typed, RGB(40,45,55), 1);
+    text(w->x+28, w->y+122, "READY", RGB(65,75,90), 1);
 }
 
 static void desktop(void) {
-    /* Background */
-    rect(0, 0, fb.width, fb.height, RGB(28,50,88));
-    rect(0, 0, fb.width, fb.height/2, RGB(48,78,128));
+    wallpaper_draw();
+    topbar();
 
-    /* Menu bar */
-    rect(0, 0, fb.width, 34, RGB(244,245,248));
-    text(16, 10, "NSK", RGB(35,38,45), 2);
-    text(75, 10, "NSK OS", RGB(70,74,84), 2);
-
-    /* Simple desktop branding */
-    text(34, 70, "NSK OS", RGB(255,255,255), 4);
-    text(36, 108, "DESKTOP", RGB(220,228,240), 2);
+    desktop_icon(25, 75, "HOME", RGB(60,145,235), 'H');
+    desktop_icon(25, 155, "FILES", RGB(75,175,110), 'F');
+    desktop_icon(25, 235, "TRASH", RGB(120,130,145), 'T');
 
     /* Draw back window first, focused window last. */
     if (focused == 0) {
@@ -412,36 +491,8 @@ static void desktop(void) {
         draw_window(&wins[0]);
         draw_window(&wins[1]);
     }
-
-    if (wins[0].open && !wins[0].minimized) {
-        window_t *w = &wins[0];
-
-        rect(w->x+1, w->y+33, 145, w->h-34, RGB(239,241,246));
-        text(w->x+18, w->y+57, "NSK OS", RGB(45,48,55), 2);
-        text(w->x+18, w->y+87, "DESKTOP", RGB(65,100,180), 1);
-        text(w->x+18, w->y+111, "FILES", RGB(65,100,180), 2);
-
-        rect(w->x+185, w->y+72, 52, 58, RGB(70,150,235));
-        rect(w->x+275, w->y+72, 52, 58, RGB(90,185,120));
-        rect(w->x+365, w->y+72, 52, 58, RGB(240,175,60));
-
-        text(w->x+195, w->y+94, "OS",  RGB(255,255,255), 2);
-        text(w->x+281, w->y+94, "APP", RGB(255,255,255), 1);
-        text(w->x+371, w->y+94, "TXT", RGB(255,255,255), 1);
-    }
-
-    if (wins[1].open && !wins[1].minimized) {
-        window_t *w = &wins[1];
-
-        rect(w->x+15, w->y+55, w->w-30, w->h-75,
-             RGB(35,38,43));
-        text(w->x+28, w->y+75, "NSK OS", RGB(100,220,130), 2);
-        text(w->x+28, w->y+100, ">", RGB(100,220,130), 2);
-
-        if (typed_len)
-            text(w->x+45, w->y+100, typed,
-                 RGB(235,235,235), 2);
-    }
+    file_manager_content();
+    terminal_content();
 
     dock();
     cursor_draw();

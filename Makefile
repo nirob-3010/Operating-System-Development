@@ -19,13 +19,16 @@ all: $(ISO)
 $(BUILD):
 	mkdir -p $(BUILD)
 
+$(BUILD)/wallpaper.o: kernel/wallpaper_rgb565.bin | $(BUILD)
+	ld -m elf_i386 -r -b binary $< -o $@
+
 $(BUILD)/boot.o: boot/boot.s | $(BUILD)
 	$(AS) --32 $< -o $@
 
-$(BUILD)/kernel.o: kernel/kernel.c | $(BUILD)
+$(BUILD)/kernel.o: kernel/kernel.c kernel/wallpaper.h kernel/wallpaper_rgb565.bin | $(BUILD)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(KERNEL): $(BUILD)/boot.o $(BUILD)/kernel.o
+$(KERNEL): $(BUILD)/boot.o $(BUILD)/kernel.o $(BUILD)/wallpaper.o
 	$(LD) $(LDFLAGS) -o $@ $^
 
 $(ISO): $(KERNEL) boot/grub.cfg
