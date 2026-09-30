@@ -12,7 +12,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y debootstrap debian-archive-keyring squashfs-tools xorriso curl git make
           git clone --depth 1 https://salsa.debian.org/live-team/live-build.git /tmp/lb
-          sudo make -C /tmp/lb install
+          cd /tmp/lb
+          sudo mkdir -p /usr/share/live/build /usr/lib/live
+          sudo cp -r data functions /usr/share/live/build
+          sudo sh -c "sed -e 's/.*(\\(.*\\)).*/\\1/; s/^[0-9]://; q' debian/changelog > /usr/share/live/build/VERSION"
+          sudo cp -r share/* /usr/share/live/build
+          sudo cp -a frontend/* /usr/bin
+          sudo cp -a scripts/* /usr/lib/live
       - name: Vendor xterm.js
         run: |
           V=overlay/includes.chroot/usr/share/nsk/ui/vendor
