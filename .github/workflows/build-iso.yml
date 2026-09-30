@@ -1,0 +1,27 @@
+name: Build NSK OS ISO
+on:
+  push:
+  workflow_dispatch:
+jobs:
+  iso:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install live-build (upstream)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y debootstrap debian-archive-keyring squashfs-tools xorriso curl git make
+          git clone --depth 1 https://salsa.debian.org/live-team/live-build.git /tmp/lb
+          sudo make -C /tmp/lb install
+      - name: Vendor xterm.js
+        run: |
+          V=overlay/includes.chroot/usr/share/nsk/ui/vendor
+          curl -fsSL https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js -o $V/xterm.js
+          curl -fsSL https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css -o $V/xterm.css
+          curl -fsSL https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js -o $V/fit.js
+      - name: Build ISO
+        run: sudo ./build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NSK-OS-ISO
+          path: live-image-amd64.hybrid.iso

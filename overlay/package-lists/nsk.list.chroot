@@ -1,0 +1,5 @@
+linux-image-amd64 live-boot live-config live-config-systemd systemd-sysv sudo
+xserver-xorg xinit openbox chromium curl
+python3 python3-aiohttp network-manager
+fonts-inter fonts-jetbrains-mono fonts-dejavu-core
+firmware-linux-free
