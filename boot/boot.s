@@ -14,10 +14,11 @@
 
 /* Multiboot video mode request:
    mode_type = 0 -> linear graphics
-   1024x768x32 preferred; GRUB may choose a compatible mode. */
+   Prefer Full HD 1920x1080x32. GRUB/emulator may fall back
+   to another compatible linear framebuffer mode. */
 .long 0
-.long 1024
-.long 768
+.long 1920
+.long 1080
 .long 32
 
 .section .text

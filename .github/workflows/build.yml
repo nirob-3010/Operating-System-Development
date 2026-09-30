@@ -1,4 +1,4 @@
-name: Build NSK OS
+name: Build NSK OS v0.6
 
 on:
   push:
@@ -48,6 +48,6 @@ jobs:
       - name: Upload ISO
         uses: actions/upload-artifact@v4
         with:
-          name: NSK-OS-v0.5
+          name: NSK-OS-v0.6
           path: build/NSK-OS.iso
           if-no-files-found: error
