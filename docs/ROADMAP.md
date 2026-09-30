@@ -22,10 +22,12 @@
 - [x] File manager UI
 
 ## v0.4
+- [x] Explicit Multiboot graphics mode request
+- [x] Safer framebuffer rendering
+- [x] Improved font
 - [ ] Real storage driver
 - [ ] Persistent filesystem
 - [ ] Create/delete/open files
-- [ ] File manager persistence
 
 ## v0.5
 - [ ] User-space applications

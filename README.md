@@ -1,31 +1,27 @@
-# NSK OS v0.3 — Desktop Input & Window System
+# NSK OS v0.4
 
-NSK OS is a from-scratch x86 operating-system project.
+NSK OS is a from-scratch 32-bit x86 graphical operating-system project.
 
-## v0.3
-- GRUB Multiboot framebuffer
-- 2D software graphics
+## Current features
+- GRUB Multiboot v1
+- Explicit linear framebuffer request
+- 1024x768x32 preferred graphics mode
+- 2D software framebuffer renderer
 - PS/2 mouse
-- PS/2 keyboard input
-- Basic event handling
-- Multiple desktop windows
-- Window focus
+- PS/2 keyboard
+- macOS-inspired menu bar and dock
+- Multiple windows
 - Dragging
 - Close/minimize controls
-- Dock launcher
-- File Manager window
-- Virtual in-memory filesystem
+- Basic File Manager UI
+- Basic Terminal UI
 - GitHub Actions ISO build
 
-### Current filesystem limitation
-The file manager is still backed by an in-memory virtual filesystem. It does not yet persist files to the ISO/HDD.
+## Build
+GitHub Actions installs `mtools` because `grub-mkrescue` requires `mformat`.
 
-## GitHub build
+The generated artifact is:
 
-Push the repository to GitHub, then:
+`build/NSK-OS.iso`
 
-**Actions → Build NSK OS → Run workflow**
-
-Download the `NSK-OS-v0.3` artifact.
-
-Test the resulting ISO with QEMU, VirtualBox, or Limbo.
+Test it in Limbo/QEMU/VirtualBox using a 32-bit x86 BIOS machine.

@@ -27,35 +27,25 @@ jobs:
             mtools \
             make
 
-      - name: Verify build tools
+      - name: Verify tools
         run: |
-          echo "=== GCC ==="
           gcc --version
-
-          echo "=== GRUB ==="
           grub-mkrescue --version
-
-          echo "=== Xorriso ==="
           xorriso --version
-
-          echo "=== Mtools ==="
           mformat -V
 
-      - name: Clean previous build
+      - name: Build
         run: |
-          rm -rf build
-          mkdir -p build
-
-      - name: Build NSK OS
-        run: |
+          make clean
           make
 
       - name: Verify ISO
         run: |
+          test -f build/NSK-OS.iso
           ls -lh build/NSK-OS.iso
           file build/NSK-OS.iso
 
-      - name: Upload NSK OS ISO
+      - name: Upload ISO
         uses: actions/upload-artifact@v4
         with:
           name: NSK-OS

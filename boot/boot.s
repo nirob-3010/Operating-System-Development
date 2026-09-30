@@ -1,15 +1,24 @@
-/* Multiboot v1 entry. GRUB supplies the framebuffer and multiboot info. */
-.set ALIGN,    1<<0
-.set MEMINFO,  1<<1
-.set FLAGS,    ALIGN | MEMINFO
-.set MAGIC,    0x1BADB002
-.set CHECKSUM, -(MAGIC + FLAGS)
+/* Multiboot v1 entry with an explicit linear framebuffer request. */
+.set ALIGN,      1<<0
+.set MEMINFO,    1<<1
+.set VIDEO_MODE, 1<<2
+.set FLAGS,      ALIGN | MEMINFO | VIDEO_MODE
+.set MAGIC,      0x1BADB002
+.set CHECKSUM,   -(MAGIC + FLAGS)
 
 .section .multiboot
 .align 4
 .long MAGIC
 .long FLAGS
 .long CHECKSUM
+
+/* Multiboot video mode request:
+   mode_type = 0 -> linear graphics
+   1024x768x32 preferred; GRUB may choose a compatible mode. */
+.long 0
+.long 1024
+.long 768
+.long 32
 
 .section .text
 .global _start
