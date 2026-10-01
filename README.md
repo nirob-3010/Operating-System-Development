@@ -7,7 +7,7 @@ The design follows the supplied NSK OS UI screenshot: a bright light desktop wit
 ## What this repository builds
 
 - Bootable `NSK-OS.iso`
-- x86_64 primary target (`TinyCorePure64 17.0`)
+- x86_64 primary target (`TinyCorePure64 17.1`)
 - BIOS + UEFI boot via GRUB when the GitHub runner has the required GRUB modules
 - Tiny Core initramfs remaster with a JWM-based desktop
 - ROX-Filer pinboard for real desktop icons and file browsing

@@ -3,7 +3,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 WORK="$ROOT/.build"
 CACHE="$ROOT/.cache"
-ISO="$CACHE/TinyCorePure64-17.0.iso"
+ISO="$CACHE/TinyCorePure64-17.1.iso"
 ISO_ROOT="$WORK/iso-root"
 BASE_INITRD="$WORK/base-initrd.gz"
 INITRD_DIR="$WORK/custom-initrd"
@@ -38,7 +38,13 @@ info "Unpacking Tiny Core initramfs: $INITRD_NAME"
 gzip -dc "$BASE_INITRD" | (cd "$INITRD_DIR" && cpio -idm --quiet)
 
 # Resolve Tiny Core .tcz dependencies recursively and scatter-install them.
-BASE_URL="https://www.tinycorelinux.net/17.x/x86_64/tcz"
+TC_VERSION="${TC_VERSION:-17.1}"
+TC_MIRRORS=(
+  "https://mirror.nju.edu.cn/tinycorelinux/17.x/x86_64/tcz"
+  "https://distro.ibiblio.org/tinycorelinux/17.x/x86_64/tcz"
+  "https://mirrors.aliyun.com/tinycorelinux/17.x/x86_64/tcz"
+  "https://www.tinycorelinux.net/17.x/x86_64/tcz"
+)
 QUEUE="$WORK/pkg-queue.txt"
 DONE="$WORK/pkg-done.txt"
 : > "$QUEUE"
@@ -49,9 +55,28 @@ has_done(){ grep -Fxq "$1" "$DONE" 2>/dev/null; }
 has_queued(){ grep -Fxq "$1" "$QUEUE" 2>/dev/null; }
 
 download_pkg(){
-  local p="$1"
+  local p="$1" base
   [ -f "$PKGDIR/$p" ] && return 0
-  curl -fL --retry 4 --retry-all-errors -o "$PKGDIR/$p" "$BASE_URL/$p"
+  for base in "${TC_MIRRORS[@]}"; do
+    if curl -fL --connect-timeout 15 --max-time 180 --retry 2 --retry-all-errors \
+        -o "$PKGDIR/$p" "$base/$p"; then
+      return 0
+    fi
+    rm -f "$PKGDIR/$p"
+    echo "[WARN] Extension mirror unavailable for $p: $base" >&2
+  done
+  return 1
+}
+
+fetch_dep(){
+  local p="$1" base
+  for base in "${TC_MIRRORS[@]}"; do
+    if curl -fsSL --connect-timeout 10 --max-time 30 --retry 1 --retry-all-errors \
+        "$base/$p.dep" -o "$WORK/dep.tmp"; then
+      return 0
+    fi
+  done
+  return 1
 }
 
 index=1
@@ -65,7 +90,7 @@ while :; do
   info "Fetching extension $pkg"
   download_pkg "$pkg" || err "Missing Tiny Core extension: $pkg"
 
-  if curl -fsSL "$BASE_URL/$pkg.dep" -o "$WORK/dep.tmp"; then
+  if fetch_dep "$pkg"; then
     while IFS= read -r dep || [ -n "$dep" ]; do
       dep="${dep%%#*}"
       dep="$(echo "$dep" | xargs || true)"
