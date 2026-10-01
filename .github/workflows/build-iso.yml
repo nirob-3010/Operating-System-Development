@@ -1,505 +1,275 @@
-name: Build NSK OS
+name: Build NSK OS v0.3
 
 on:
   push:
     branches:
       - main
       - master
-    tags:
-      - "v*"
-      - "*.*.*"
-
-  pull_request:
-
   workflow_dispatch:
     inputs:
       with_installer:
-        description: "Build installer ISO with Calamares"
-        required: true
-        default: false
+        description: "Build with Calamares installer"
+        required: false
+        default: "false"
         type: boolean
 
 permissions:
-  contents: write
-
-concurrency:
-  group: nsk-os-${{ github.ref }}
-  cancel-in-progress: true
-
-env:
-  DEBIAN_FRONTEND: noninteractive
-  NSK_VERSION: "0.3"
-  MAX_ISO_BYTES: "524288000"
+  contents: read
 
 jobs:
   build:
-    name: Build NSK OS v0.3
-    runs-on: ubuntu-latest
+    name: Build NSK OS v0.3 ISO
+    runs-on: ubuntu-24.04
+
+    container:
+      image: debian:12
+
+    env:
+      DEBIAN_FRONTEND: noninteractive
+      TZ: UTC
 
     steps:
 
-      # ============================================================
-      # CHECKOUT
-      # ============================================================
-
-      - name: Checkout repository
+      # ------------------------------------------------------------
+      # 1. Checkout source
+      # ------------------------------------------------------------
+      - name: Checkout source
         uses: actions/checkout@v4
 
-      # ============================================================
-      # RUNNER INFO
-      # ============================================================
-
-      - name: Show runner information
+      # ------------------------------------------------------------
+      # 2. Install Debian 12 build dependencies
+      # ------------------------------------------------------------
+      - name: Install build dependencies
+        shell: bash
         run: |
-          echo "========================================"
-          echo "NSK OS v0.3 BUILD"
-          echo "========================================"
+          set -eux
 
-          echo
-          echo "CPU:"
-          nproc
+          apt-get update
 
-          echo
-          echo "Memory:"
-          free -h
-
-          echo
-          echo "Disk:"
-          df -h
-
-          echo
-          echo "Kernel:"
-          uname -a
-
-      # ============================================================
-      # FREE DISK SPACE
-      # ============================================================
-
-      - name: Free GitHub Actions disk space
-        run: |
-          sudo rm -rf /usr/local/lib/android
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /opt/hostedtoolcache/CodeQL
-          sudo rm -rf /usr/local/share/powershell
-          sudo rm -rf /usr/local/share/chromium
-          sudo apt-get clean
-
-          echo
-          echo "Disk after cleanup:"
-          df -h
-
-      # ============================================================
-      # INSTALL BUILD TOOLS
-      # ============================================================
-
-      - name: Install Debian live-build toolchain
-        run: |
-          sudo apt-get update
-
-          sudo apt-get install -y \
+          apt-get install -y --no-install-recommends \
             live-build \
             debootstrap \
-            xorriso \
             squashfs-tools \
-            xz-utils \
-            syslinux \
+            xorriso \
             isolinux \
+            syslinux-common \
+            syslinux-utils \
             grub-pc-bin \
             grub-efi-amd64-bin \
             grub-efi-amd64-signed \
             shim-signed \
-            dosfstools \
             mtools \
+            dosfstools \
             rsync \
-            cpio \
-            gzip \
-            bzip2 \
-            file \
+            ca-certificates \
             wget \
             curl \
-            git
+            file \
+            git \
+            xz-utils \
+            gzip \
+            bzip2 \
+            cpio \
+            gnupg \
+            apt-utils \
+            locales
 
-          echo
-          echo "========================================"
-          echo "TOOL VERSIONS"
-          echo "========================================"
+          rm -rf /var/lib/apt/lists/*
 
-          lb --version || true
-          debootstrap --version || true
-          xorriso --version | head -n 2
-          mksquashfs -version | head -n 2
-
-      # ============================================================
-      # VERIFY REPOSITORY
-      # ============================================================
-
-      - name: Verify NSK OS repository
+      # ------------------------------------------------------------
+      # 3. Show versions
+      # ------------------------------------------------------------
+      - name: Show build environment
+        shell: bash
         run: |
           set -eux
 
-          test -f auto/config
-          test -f auto/build
-          test -f auto/clean
+          echo "===== Debian ====="
+          cat /etc/debian_version
 
-          test -d config
-          test -d config/package-lists
-          test -d config/includes.chroot
-          test -d config/hooks
+          echo "===== live-build ====="
+          lb --version
 
-          echo "NSK OS source tree verified."
+          echo "===== xorriso ====="
+          xorriso -version | head -n 3
 
-      # ============================================================
-      # FIX SCRIPT PERMISSIONS
-      # ============================================================
+          echo "===== mksquashfs ====="
+          mksquashfs -version | head -n 2
 
-      - name: Fix live-build script permissions
+      # ------------------------------------------------------------
+      # 4. Fix executable permissions
+      # ------------------------------------------------------------
+      - name: Fix live-build permissions
+        shell: bash
         run: |
+          set -eux
+
           chmod +x auto/config
           chmod +x auto/build
           chmod +x auto/clean
 
-          echo
-          echo "Build scripts:"
-          ls -lah auto/
+          find auto -type f -maxdepth 2 -print
 
-      # ============================================================
-      # INSTALLER MODE
-      # ============================================================
-
-      - name: Configure installer mode
-        env:
-          WITH_INSTALLER_INPUT: ${{ inputs.with_installer }}
-        run: |
-          set -eux
-
-          mkdir -p config/package-lists
-
-          INSTALLER="false"
-
-          if [ "${WITH_INSTALLER_INPUT:-false}" = "true" ]; then
-            INSTALLER="true"
-          fi
-
-          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
-            INSTALLER="false"
-          fi
-
-          if [ "$INSTALLER" = "true" ]; then
-
-            echo "Building NSK OS installer edition."
-
-            cat > config/package-lists/installer.list.chroot <<'EOF'
-          calamares
-          calamares-settings-debian
-          EOF
-
-            echo "NSK_WITH_INSTALLER=true" >> "$GITHUB_ENV"
-
-          else
-
-            echo "Building lightweight live edition."
-
-            rm -f config/package-lists/installer.list.chroot
-
-            echo "NSK_WITH_INSTALLER=false" >> "$GITHUB_ENV"
-
-          fi
-
-      # ============================================================
-      # CLEAN OLD LIVE-BUILD DATA
-      # ============================================================
-
-      - name: Clean previous live-build state
+      # ------------------------------------------------------------
+      # 5. Clean previous live-build state
+      # ------------------------------------------------------------
+      - name: Clean live-build
+        shell: bash
         run: |
           set -eux
 
           bash auto/clean || true
 
-      # ============================================================
-      # CONFIGURE LIVE-BUILD
-      # ============================================================
+          rm -rf \
+            cache \
+            chroot \
+            binary \
+            .build \
+            config/chroot \
+            config/binary \
+            config/bootstrap \
+            config/common \
+            config/archives \
+            config/apt \
+            config/debian-installer \
+            config/bootloaders
 
-      - name: Configure live-build
+      # ------------------------------------------------------------
+      # 6. Configure live-build
+      # ------------------------------------------------------------
+      - name: Configure NSK OS
+        shell: bash
         run: |
           set -eux
 
           bash auto/config
 
-      # ============================================================
-      # VERIFY CONFIG
-      # ============================================================
-
+      # ------------------------------------------------------------
+      # 7. Verify configuration
+      # ------------------------------------------------------------
       - name: Verify live-build configuration
+        shell: bash
         run: |
           set -eux
 
-          echo
-          echo "========================================"
-          echo "LIVE-BUILD CONFIGURATION"
-          echo "========================================"
+          echo "===== config tree ====="
+          find config -maxdepth 3 -type f | sort | head -n 200
 
-          lb config --dump || true
+          echo "===== live-build config ====="
+          lb config --help | grep -E \
+            "bootloader|squashfs|compression|iso-hybrid|architectures" \
+            || true
 
-          echo
-          echo "========================================"
-          echo "PACKAGE LISTS"
-          echo "========================================"
-
-          find config/package-lists \
-            -maxdepth 1 \
-            -type f \
-            -print \
-            -exec sh -c 'echo "--- $1"; cat "$1"' _ {} \;
-
-      # ============================================================
-      # BUILD ISO
-      # ============================================================
-
+      # ------------------------------------------------------------
+      # 8. Build ISO
+      # ------------------------------------------------------------
       - name: Build NSK OS ISO
+        shell: bash
         run: |
           set -eux
 
           export MKSQUASHFS_OPTIONS="-comp xz -Xbcj x86 -b 1M"
 
-          echo
-          echo "========================================"
-          echo "STARTING LIVE-BUILD"
-          echo "========================================"
+          bash auto/build 2>&1 | tee nsk-os-build.log
 
-          sudo -E lb build 2>&1 | tee nsk-os-build.log
-
-      # ============================================================
-      # FIND ISO
-      # ============================================================
-
-      - name: Find generated ISO
+      # ------------------------------------------------------------
+      # 9. Find generated ISO
+      # ------------------------------------------------------------
+      - name: Locate ISO
+        shell: bash
         run: |
           set -eux
 
-          echo
-          echo "Generated ISO files:"
+          echo "===== Generated files ====="
 
           find . \
             -type f \
-            \( \
-              -name "*.iso" \
-              -o -name "*.hybrid.iso" \
-            \) \
-            -print
+            \( -name "*.iso" -o -name "*.img" -o -name "*.hybrid.iso" \) \
+            -printf "%p %s bytes\n" \
+            | sort
 
-          ISO="$(find . \
-            -type f \
-            \( \
-              -name "*.iso" \
-              -o -name "*.hybrid.iso" \
-            \) \
-            -print -quit)"
+      # ------------------------------------------------------------
+      # 10. Rename ISO
+      # ------------------------------------------------------------
+      - name: Prepare ISO artifact
+        shell: bash
+        run: |
+          set -eux
+
+          ISO="$(find . -maxdepth 3 -type f -name '*.iso' | head -n 1)"
 
           if [ -z "$ISO" ]; then
             echo "ERROR: ISO was not generated."
             exit 1
           fi
 
-          echo "ISO_FOUND=$ISO" >> "$GITHUB_ENV"
+          echo "Found ISO: $ISO"
 
-          echo
-          echo "ISO found:"
-          echo "$ISO"
+          cp "$ISO" NSK-OS-v0.3-amd64.iso
 
-      # ============================================================
-      # PREPARE RELEASE DIRECTORY
-      # ============================================================
+          ls -lh NSK-OS-v0.3-amd64.iso
 
-      - name: Prepare release
-        run: |
-          set -eux
-
-          mkdir -p release
-
-          if [ "$NSK_WITH_INSTALLER" = "true" ]; then
-            OUTPUT="nsk-os-0.3-amd64-installer.iso"
-          else
-            OUTPUT="nsk-os-0.3-amd64.iso"
-          fi
-
-          sudo cp "$ISO_FOUND" "release/$OUTPUT"
-          sudo chown "$(id -u):$(id -g)" "release/$OUTPUT"
-
-          echo "ISO_OUTPUT=release/$OUTPUT" >> "$GITHUB_ENV"
-
-          ls -lh release/
-
-      # ============================================================
-      # SHA256
-      # ============================================================
-
-      - name: Generate SHA256 checksum
-        run: |
-          set -eux
-
-          cd release
-
-          sha256sum \
-            "$(basename "$ISO_OUTPUT")" \
-            > "$(basename "$ISO_OUTPUT").sha256"
-
-          echo
-          echo "SHA256:"
-          cat "$(basename "$ISO_OUTPUT").sha256"
-
-      # ============================================================
-      # HARD 500 MB LIMIT
-      # ============================================================
-
+      # ------------------------------------------------------------
+      # 11. Check ISO size
+      # ------------------------------------------------------------
       - name: Check ISO size
+        shell: bash
         run: |
           set -eux
 
-          SIZE="$(stat -c '%s' "$ISO_OUTPUT")"
+          SIZE_BYTES="$(stat -c%s NSK-OS-v0.3-amd64.iso)"
+          SIZE_MIB="$((SIZE_BYTES / 1024 / 1024))"
 
-          SIZE_MB="$(awk \
-            "BEGIN {printf \"%.2f\", $SIZE / 1048576}")
+          echo "ISO size: ${SIZE_MIB} MiB"
+          echo "ISO size: ${SIZE_BYTES} bytes"
 
-          echo
-          echo "========================================"
-          echo "NSK OS ISO SIZE"
-          echo "========================================"
-          echo "Size: ${SIZE_MB} MiB"
-          echo "Limit: 500 MiB"
-          echo "Bytes: ${SIZE}"
-          echo
-
-          if [ "$SIZE" -gt "$MAX_ISO_BYTES" ]; then
-
-            echo "========================================"
-            echo "BUILD FAILED"
-            echo "ISO EXCEEDS 500 MiB"
-            echo "========================================"
-
+          if [ "$SIZE_BYTES" -gt 524288000 ]; then
+            echo ""
+            echo "ERROR: ISO is larger than 500 MiB."
+            echo "Actual size: ${SIZE_MIB} MiB"
             exit 1
-
           fi
 
-          echo "ISO SIZE CHECK: PASS"
+          echo ""
+          echo "ISO is within the 500 MiB target."
 
-      # ============================================================
-      # ISO INFORMATION
-      # ============================================================
-
-      - name: Inspect ISO boot configuration
+      # ------------------------------------------------------------
+      # 12. Verify ISO
+      # ------------------------------------------------------------
+      - name: Verify ISO
+        shell: bash
         run: |
           set -eux
 
-          echo
-          echo "ISO file:"
-          file "$ISO_OUTPUT"
-
-          echo
-          echo "El Torito / BIOS / UEFI information:"
+          file NSK-OS-v0.3-amd64.iso
 
           xorriso \
-            -indev "$ISO_OUTPUT" \
+            -indev NSK-OS-v0.3-amd64.iso \
             -report_el_torito plain \
-            2>&1 | tee release/boot-info.txt || true
+            2>&1 | tee iso-boot-info.txt
 
-          echo
-          echo "ISO table of contents:"
-
-          xorriso \
-            -indev "$ISO_OUTPUT" \
-            -toc \
-            2>&1 | tee release/iso-toc.txt || true
-
-      # ============================================================
-      # BUILD INFO
-      # ============================================================
-
-      - name: Generate build information
+      # ------------------------------------------------------------
+      # 13. SHA256
+      # ------------------------------------------------------------
+      - name: Generate SHA256
+        shell: bash
         run: |
           set -eux
 
-          SHA="$(cut -d' ' -f1 "${ISO_OUTPUT}.sha256")"
+          sha256sum NSK-OS-v0.3-amd64.iso \
+            | tee NSK-OS-v0.3-amd64.iso.sha256
 
-          cat > release/build-info.txt <<EOF
-          NSK OS v0.3
-          =============================
-
-          Distribution:
-          NSK OS
-
-          Desktop:
-          NSK Desktop
-
-          Base:
-          Debian GNU/Linux 12 (Bookworm)
-
-          Architecture:
-          amd64
-
-          Hostname:
-          nskos
-
-          Default user:
-          nsk
-
-          Build system:
-          Debian live-build
-
-          Installer:
-          ${NSK_WITH_INSTALLER}
-
-          Commit:
-          ${GITHUB_SHA}
-
-          Ref:
-          ${GITHUB_REF}
-
-          Workflow:
-          ${GITHUB_WORKFLOW}
-
-          Run:
-          ${GITHUB_RUN_ID}
-
-          ISO:
-          $(basename "$ISO_OUTPUT")
-
-          SHA256:
-          ${SHA}
-          EOF
-
-          cat release/build-info.txt
-
-      # ============================================================
-      # UPLOAD ARTIFACT
-      # ============================================================
-
-      - name: Upload NSK OS artifact
+      # ------------------------------------------------------------
+      # 14. Upload ISO
+      # ------------------------------------------------------------
+      - name: Upload ISO
         uses: actions/upload-artifact@v4
         with:
-          name: nsk-os-0.3-amd64
+          name: NSK-OS-v0.3-amd64
           path: |
-            release/*.iso
-            release/*.sha256
-            release/build-info.txt
-            release/boot-info.txt
-            release/iso-toc.txt
+            NSK-OS-v0.3-amd64.iso
+            NSK-OS-v0.3-amd64.iso.sha256
+            iso-boot-info.txt
             nsk-os-build.log
           if-no-files-found: error
           retention-days: 30
-          compression-level: 0
-
-      # ============================================================
-      # GITHUB RELEASE
-      # ============================================================
-
-      - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            release/*.iso
-            release/*.sha256
-            release/build-info.txt
-          generate_release_notes: true
-          fail_on_unmatched_files: true

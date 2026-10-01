@@ -1,5 +1,6 @@
 #!/bin/sh
 set -eu
+
 lb config \
   --distribution bookworm \
   --architectures amd64 \
@@ -14,11 +15,11 @@ lb config \
   --chroot-squashfs-compression-type xz \
   --chroot-squashfs-compression-level 9 \
   --initramfs-compression xz \
-  --grub-splash "config/includes.binary/boot/grub/background.png" \
-  --memtest none \
+  --chroot-filesystem squashfs \
   --iso-application "NSK OS" \
   --iso-publisher "NSK" \
   --iso-volume "NSK_OS_0.3" \
   --iso-preparer "live-build" \
   --firmware-binary false \
-  --firmware-chroot false
+  --firmware-chroot false \
+  --memtest none
