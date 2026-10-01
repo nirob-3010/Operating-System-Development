@@ -35,7 +35,12 @@ cp "$KERNEL" "$WORK/vmlinuz"
 cp "$INITRD" "$BASE_INITRD"
 
 info "Unpacking Tiny Core initramfs: $INITRD_NAME"
-gzip -dc "$BASE_INITRD" | (cd "$INITRD_DIR" && cpio -idm --quiet)
+# GitHub-hosted runners are intentionally unprivileged for device-node creation.
+# Tiny Core's initramfs contains static /dev nodes, which cannot be recreated by
+# an unprivileged cpio extraction. Tiny Core recreates/uses runtime devices at
+# boot, so omit the packaged device nodes during remastering and keep /dev itself.
+mkdir -p "$INITRD_DIR/dev"
+gzip -dc "$BASE_INITRD" | (cd "$INITRD_DIR" && cpio -idm --quiet --no-absolute-filenames --no-preserve-owner --exclude='dev/*')
 
 # Resolve Tiny Core .tcz dependencies recursively and scatter-install them.
 TC_VERSION="${TC_VERSION:-17.1}"
