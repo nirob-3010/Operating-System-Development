@@ -1,0 +1,7 @@
+/* XPM */
+static char * hide[] = {
+"18 18 2 1",
+". c None",
+"A c ##ffbd2e",
+"..................","..................","..................","......AAAAAA......","....AAAAAAAAAA....","....AAAAAAAAAA....","...AAAAAAAAAAAA...","...AAAAAAAAAAAA...","...AAAAAAAAAAAA...","...AAAAAAAAAAAA...","...AAAAAAAAAAAA...","...AAAAAAAAAAAA...","....AAAAAAAAAA....","....AAAAAAAAAA....","......AAAAAA......","..................","..................",".................."
+};

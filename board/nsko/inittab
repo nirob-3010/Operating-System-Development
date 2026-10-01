@@ -1,6 +1,0 @@
-# NSK OS minimal init
-::sysinit:/etc/init.d/rcS
-tty1::respawn:/usr/bin/nskdesktop
-::ctrlaltdel:/sbin/reboot
-::shutdown:/etc/init.d/rcK
-::restart:/sbin/init

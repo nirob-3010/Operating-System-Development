@@ -1,4 +1,11 @@
-.build/
-output/
-dist/
+*.iso
+*.iso.sha256
+binary/
+cache/
+chroot/
+common/
+source/
+stage/
+work/
 *.log
+.DS_Store

@@ -1,0 +1,16 @@
+active_text_color=#17304f
+inactive_text_color=#70839a
+active_text_shadow_color=#ffffff
+inactive_text_shadow_color=#ffffff
+button_offset=1
+button_spacing=4
+full_width_title=true
+title_alignment=center
+title_shadow_active=false
+title_shadow_inactive=false
+frame_border_left=7
+frame_border_right=7
+frame_border_top=7
+frame_border_bottom=7
+show_app_icon=false
+button_layout=CHM|

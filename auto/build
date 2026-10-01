@@ -1,0 +1,3 @@
+#!/bin/sh
+set -eu
+sudo env MKSQUASHFS_OPTIONS="-comp xz -Xbcj x86 -b 1M" lb build

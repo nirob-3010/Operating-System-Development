@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+# Start the compositing layer first so panel, dock and cards share the same translucency.
+pgrep -x picom >/dev/null 2>&1 || picom --config "$HOME/.config/picom/picom.conf" >/dev/null 2>&1 &
+sleep 0.2
+pgrep -x plank >/dev/null 2>&1 || plank >/dev/null 2>&1 &
+pgrep -x conky >/dev/null 2>&1 || conky -c "$HOME/.config/conky/nsk.conf" >/dev/null 2>&1 &
+exit 0

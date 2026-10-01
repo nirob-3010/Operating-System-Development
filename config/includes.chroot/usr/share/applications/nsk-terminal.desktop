@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=NSK Terminal
+Comment=NSK OS terminal
+Exec=/usr/local/bin/nsk-terminal
+Icon=nsk-terminal
+Terminal=false
+Type=Application
+Categories=System;TerminalEmulator;
+StartupNotify=true

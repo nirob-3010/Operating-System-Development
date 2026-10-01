@@ -1,0 +1,23 @@
+#!/bin/sh
+set -eu
+
+# Point desktop applications at the custom terminal and browser.
+install -d /usr/local/share/applications
+update-desktop-database /usr/share/applications 2>/dev/null || true
+
+# Make the requested terminal command available as the default x-terminal-emulator.
+ln -sf /usr/local/bin/nsk-terminal /usr/local/bin/x-terminal-emulator
+
+# Ensure XFCE autostart can run the visual layer after the session starts.
+mkdir -p /etc/xdg/autostart
+cp /home/nsk/.config/autostart/nsk-session.desktop /etc/xdg/autostart/nsk-session.desktop
+chmod 644 /etc/xdg/autostart/nsk-session.desktop
+
+# GTK/XFCE defaults for any newly created user.
+mkdir -p /etc/skel/.config
+cp -a /home/nsk/.config/xfce4 /etc/skel/.config/
+cp -a /home/nsk/.config/gtk-3.0 /etc/skel/.config/
+cp -a /home/nsk/.config/plank /etc/skel/.config/
+cp -a /home/nsk/.config/conky /etc/skel/.config/
+cp -a /home/nsk/.config/picom /etc/skel/.config/
+cp -a /home/nsk/.config/neofetch /etc/skel/.config/

@@ -1,0 +1,2 @@
+#!/bin/sh
+exec xfce4-terminal --title="NSK Terminal" --command="/usr/local/bin/nsk-terminal-shell"

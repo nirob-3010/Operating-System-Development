@@ -1,0 +1,10 @@
+#!/bin/sh
+set -eu
+mkdir -p binary/isolinux binary/boot/grub
+if [ -f binary/isolinux/isolinux.cfg ]; then
+  sed -i '1i DEFAULT live\nPROMPT 0\nTIMEOUT 30\n' binary/isolinux/isolinux.cfg || true
+fi
+if [ -f binary/boot/grub/grub.cfg ]; then
+  sed -i '1i set color_normal=white/blue\nset color_highlight=blue/white\n' binary/boot/grub/grub.cfg || true
+fi
+exit 0

@@ -1,2 +1,0 @@
-# Generated reference defconfig.
-# build.sh starts from qemu_x86_64_defconfig and applies the NSK fragment.

@@ -1,3 +1,0 @@
-menu "NSK OS packages"
-source "$BR2_EXTERNAL_NSKOS_PATH/package/nskdesktop/Config.in"
-endmenu

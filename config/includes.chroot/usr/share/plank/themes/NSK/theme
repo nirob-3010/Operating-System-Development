@@ -1,0 +1,14 @@
+[PlankTheme]
+TopRoundness=14
+BottomRoundness=14
+ItemPadding=8
+HorizontalPadding=16
+VerticalPadding=8
+LineWidth=1
+OuterStrokeColor=255;255;255;0.40
+FillStartColor=255;255;255;0.76
+FillEndColor=255;255;255;0.66
+InnerStrokeColor=255;255;255;0.25
+IndicatorColor=30;111;220;1.0
+GlowSize=2
+GlowTime=0

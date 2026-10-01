@@ -1,62 +1,168 @@
-# NSK OS
+# NSK OS v0.3
 
-A small x86_64 desktop OS project designed for low-end PCs and VMs, with a custom framebuffer desktop shell.
+NSK OS is a compact Debian 12 (Bookworm) live Linux desktop built with
+`live-build`, XFCE 4.18, picom, Plank and a custom lightweight Python/WebKit
+browser. The desktop is named **NSK Desktop**.
 
-## What this repository contains
+The visual target is the supplied NSK OS mockup: light Fluent surfaces,
+blue/lavender wallpaper, macOS-style traffic lights on the left, compact
+top panel, Conky system card and centered Plank dock.
 
-- A custom framebuffer desktop shell (`nskdesktop`) written in C.
-- A Buildroot-based Linux kernel + BusyBox userspace underneath.
-- The supplied NSK wallpaper, preprocessed to RGB565 at 1024x768.
-- File Manager, Terminal, Browser shell, Settings and dock interactions.
-- GitHub Actions workflow that builds a bootable ISO.
-- No GUI framework is required; the desktop is drawn directly to `/dev/fb0`.
+## Features
 
-> "Scratch" here means the NSK OS desktop/userspace layer is implemented in this repository rather than being a prebuilt desktop environment. The kernel and BusyBox are fetched and built by Buildroot so the ISO stays small and practical.
+- Debian 12 Bookworm, amd64
+- Hybrid BIOS + UEFI live ISO
+- XFCE 4.18 / NSK Desktop
+- LightDM autologin user `nsk`
+- Hostname `nskos`
+- 1024x768-oriented layout
+- Supplied wallpaper installed as `/usr/share/backgrounds/nsk-wallpaper.jpg`
+- Inter UI font, JetBrains Mono terminal font, Noto Sans Bengali
+- Custom NSK-Fluent SVG icons
+- Custom XFWM traffic-light buttons
+- picom transparency, shadows and rounded corners
+- Plank dock
+- Conky CPU/RAM/Disk card
+- Thunar, Ristretto, Audacious and XFCE Settings
+- Custom `NSK Browser` using Python 3 + GTK3 + WebKit2GTK
+- Simple host-list ad blocking, tabs, private tabs, bookmarks, history,
+  downloads, dark mode, desktop-site toggle and HTML5 fullscreen
+- Aggressive live-image cleanup
+- Default ISO build has a hard 500 MiB size gate in CI
 
-## Target
+## Repository
 
-- x86_64 BIOS/VM
-- 300 MB ISO target
-- QEMU / VirtualBox / VMware / physical x86_64 PCs
-- 512 MB RAM or more recommended; 256 MB may boot depending on VM configuration
-
-## Build locally
-
-The build is pinned to Buildroot 2026.08 and starts from its QEMU x86_64 baseline; the NSK desktop is then added as a br2-external package. Buildroot documents this external-tree workflow and the ISO9660/GRUB2 image flow.
-
-
-```bash
-./build.sh
+```text
+auto/
+config/
+scripts/
+screenshots/
+.github/workflows/
+README.md
+CHECKLIST.md
 ```
 
-The script downloads a pinned Buildroot release, applies the NSK package and kernel fragment, then produces:
+## GitHub Actions build
 
-`output/images/nsko-x86_64.iso`
+Push this repository to GitHub and open **Actions → Build NSK OS**.
 
-## Run with QEMU
+The workflow runs on `ubuntu-latest`, installs live-build/debootstrap/xorriso/
+squashfs tooling, frees runner disk space, builds the ISO, calculates SHA-256,
+prints its size and fails the normal build if it exceeds 500 MiB.
 
-```bash
-qemu-system-x86_64 -m 768 -cdrom output/images/nsko-x86_64.iso -boot d -vga std
+A tag such as `v0.3` additionally publishes the generated ISO and checksum as
+GitHub Release assets.
+
+### Optional installer build
+
+Run the workflow manually and set:
+
+```text
+with_installer = true
 ```
 
-If your VM exposes a different framebuffer, try a VESA-compatible display mode.
+This creates a second, larger ISO named:
 
-## GitHub Actions
+```text
+nsk-os-0.3-amd64-installer.iso
+```
 
-Push this repository to GitHub and run **Build NSK OS ISO** from Actions. The ISO is uploaded as an artifact.
+The installer variant adds Calamares. The 500 MiB gate applies only to the
+default live-only image.
 
-## Keyboard
+## Local build
 
-- Type in Terminal normally.
-- Enter: run command
-- Backspace: delete
-- F1: focus Home
-- Terminal supports real `/bin/sh` commands such as `ls`, `pwd`, `uname`, `date`, `echo`, `clear`, `help`, `neofetch`, `reboot`, and `poweroff`.
+Requirements:
 
-## Size
+- Debian/Ubuntu build host
+- sudo access
+- internet connection
+- at least 10 GiB free working space
 
-The build script checks the resulting ISO and fails the build if it exceeds 300,000,000 bytes (~286 MiB).
+Commands:
 
-## Important scope
+```bash
+sudo apt-get update
+sudo apt-get install -y live-build debootstrap xorriso squashfs-tools \
+  grub-pc-bin grub-efi-amd64-bin syslinux isolinux
+git clone <your-repository-url> nsk-os
+cd nsk-os
+./auto/config
+sudo lb build
+```
 
-This is a real bootable Linux-based OS image with a custom NSK desktop, not a fake HTML mockup. The kernel and BusyBox userspace are built from source by Buildroot. The desktop itself is written from scratch in C and draws directly to the Linux framebuffer. It is intentionally not a full Windows/macOS clone: the included Browser is a lightweight shell, while the Terminal exposes the real BusyBox/Linux command environment.
+Or use the helper:
+
+```bash
+WITH_INSTALLER=false ./scripts/build.sh
+```
+
+For the installer:
+
+```bash
+WITH_INSTALLER=true ./scripts/build.sh
+```
+
+The build hooks download the three requested UI fonts during the chroot stage,
+so a network connection is required.
+
+## Test in QEMU
+
+```bash
+qemu-system-x86_64 \
+  -m 2048 \
+  -smp 2 \
+  -cdrom nsk-os-0.3-amd64.iso \
+  -boot d \
+  -display gtk
+```
+
+For a BIOS/UEFI-capable VM such as VirtualBox, create an x86_64 Linux VM,
+attach the ISO as the optical disk, enable EFI when testing the UEFI path, and
+use 2 GiB RAM / 2 virtual CPUs for a comfortable visual test.
+
+## Development notes
+
+The build deliberately does not ship Firefox or Chromium. The browser is a
+single Python source file installed as `/usr/local/bin/nsk-browser`.
+
+The default account is:
+
+```text
+user: nsk
+password: nsk
+```
+
+This is a live-session convenience account. Do not reuse this password on an
+installed or persistent system.
+
+## Debian attribution
+
+NSK OS is based on Debian GNU/Linux 12 (Bookworm). Debian trademarks and
+copyrights remain with their respective holders. Debian components are
+redistributed under their applicable licenses.
+
+XFCE, LightDM, Plank, picom, Conky, WebKitGTK, GStreamer, Ristretto,
+Audacious and the other included projects retain their upstream licenses.
+
+The Inter, JetBrains Mono and Noto Sans Bengali fonts are distributed under
+their respective open-font licenses.
+
+NSK OS-specific configuration, scripts and artwork in this repository are
+provided under the MIT License unless a file states otherwise.
+
+## Size caveat
+
+The repository contains an explicit CI size gate, but an ISO size cannot be
+truthfully guaranteed before the actual Debian mirror/package set is built.
+Package revisions, compression ratios and dependency metadata can change.
+The workflow therefore measures the resulting ISO and fails the default build
+when it is above 500 MiB.
+
+## Visual fidelity caveat
+
+The mockup is a raster reference. GTK/XFWM/picom rendering varies with the
+graphics driver, display scale, font rasterizer and compositor. This source
+uses custom CSS, XFWM assets, SVG icons, Conky geometry and the supplied
+wallpaper to reproduce the layout closely, but it cannot mathematically
+guarantee identical pixels on every GPU/VM.

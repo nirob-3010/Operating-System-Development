@@ -1,0 +1,32 @@
+/* NSK Light: Fluent-inspired GTK overrides */
+* {
+  -GtkWidget-focus-line-width: 0;
+  -GtkWidget-focus-padding: 0;
+  font-family: Inter, "Noto Sans", sans-serif;
+}
+window, .background, decoration {
+  background-color: rgba(255,255,255,0.82);
+  color: #16233b;
+}
+button {
+  border-radius: 8px;
+  border: 1px solid rgba(41,104,196,0.12);
+  background-image: none;
+  background-color: rgba(255,255,255,0.82);
+  box-shadow: 0 2px 8px rgba(26,70,130,0.10);
+}
+button:hover { background-color: rgba(232,243,255,0.96); }
+entry, spinbutton, combobox, .view {
+  border-radius: 9px;
+}
+headerbar {
+  background: rgba(255,255,255,0.78);
+  border-bottom: 1px solid rgba(65,110,170,0.16);
+  box-shadow: 0 2px 12px rgba(20,60,110,0.10);
+}
+tooltip {
+  background-color: rgba(255,255,255,0.94);
+  color: #15233b;
+  border: 1px solid rgba(80,120,180,0.18);
+  border-radius: 8px;
+}

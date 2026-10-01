@@ -1,0 +1,110 @@
+name: Build NSK OS
+
+on:
+  push:
+  workflow_dispatch:
+    inputs:
+      with_installer:
+        description: "Build the larger Calamares installer image"
+        required: true
+        default: false
+        type: boolean
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      DEBIAN_FRONTEND: noninteractive
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Free runner disk space
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache
+          sudo docker system prune -af || true
+          df -h
+
+      - name: Cache apt and debootstrap
+        uses: actions/cache@v4
+        with:
+          path: |
+            /var/cache/apt
+            /var/lib/apt/lists
+            /var/cache/debootstrap
+          key: ${{ runner.os }}-nskos-debian12-${{ hashFiles('auto/config', 'config/package-lists/**') }}
+          restore-keys: |
+            ${{ runner.os }}-nskos-debian12-
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            live-build debootstrap xorriso squashfs-tools \
+            grub-pc-bin grub-efi-amd64-bin grub-efi-amd64-signed \
+            shim-signed syslinux isolinux \
+            dosfstools mtools rsync
+
+      - name: Select package set
+        run: |
+          if [ "${{ inputs.with_installer || 'false' }}" = "true" ]; then
+            printf '%s\n' calamares calamares-settings-debian > config/package-lists/installer.list.chroot
+          else
+            rm -f config/package-lists/installer.list.chroot
+          fi
+
+      - name: Configure live-build
+        run: |
+          ./auto/clean || true
+          ./auto/config
+
+      - name: Build ISO
+        run: |
+          sudo env MKSQUASHFS_OPTIONS="-comp xz -Xbcj x86 -b 1M" lb build
+
+      - name: Rename ISO and checksum
+        run: |
+          ISO="$(find . -maxdepth 1 -type f -name '*.hybrid.iso' -print -quit)"
+          test -n "$ISO"
+          if [ "${{ inputs.with_installer || 'false' }}" = "true" ]; then
+            OUT="nsk-os-0.3-amd64-installer.iso"
+          else
+            OUT="nsk-os-0.3-amd64.iso"
+          fi
+          mv "$ISO" "$OUT"
+          sha256sum "$OUT" > "$OUT.sha256"
+          ls -lh "$OUT" "$OUT.sha256"
+
+      - name: Enforce 500 MiB default ISO limit
+        if: ${{ inputs.with_installer != true }}
+        run: |
+          BYTES="$(stat -c '%s' nsk-os-0.3-amd64.iso)"
+          echo "ISO bytes: $BYTES"
+          if [ "$BYTES" -gt 524288000 ]; then
+            echo "::error::NSK OS live ISO exceeds 500 MiB"
+            exit 1
+          fi
+
+      - name: Upload ISO artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nsk-os-0.3-${{ inputs.with_installer == true && 'installer' || 'live' }}
+          path: |
+            nsk-os-0.3-amd64*.iso
+            nsk-os-0.3-amd64*.iso.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish tag release assets
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            nsk-os-0.3-amd64*.iso
+            nsk-os-0.3-amd64*.iso.sha256
+          generate_release_notes: true
