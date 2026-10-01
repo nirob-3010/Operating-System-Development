@@ -1,0 +1,23 @@
+/**
+ * NSK OS v0.3 - Physical Memory Manager (Bitmap-based Page Frame Allocator)
+ */
+#ifndef NSK_PMM_H
+#define NSK_PMM_H
+
+#include "types.h"
+#include "multiboot2.h"
+
+#define PMM_BLOCK_SIZE     4096 // 4 KB page frames
+#define PMM_BLOCKS_PER_BYTE 8
+
+void pmm_init(struct multiboot_tag_mmap* mmap, uint32_t kernel_start, uint32_t kernel_end);
+void* pmm_alloc_block(void);
+void  pmm_free_block(void* ptr);
+
+uint32_t pmm_get_total_memory(void);
+uint32_t pmm_get_used_memory(void);
+uint32_t pmm_get_free_memory(void);
+uint32_t pmm_get_total_blocks(void);
+uint32_t pmm_get_used_blocks(void);
+
+#endif /* NSK_PMM_H */

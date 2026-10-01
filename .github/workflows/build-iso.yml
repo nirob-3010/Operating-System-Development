@@ -1,0 +1,48 @@
+name: Build NSK OS ISO and Test
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install x86 toolchain and build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-multilib nasm grub-pc-bin grub-common xorriso mtools qemu-system-x86 python3 python3-pip
+
+      - name: Compile Kernel
+        run: |
+          make all
+
+      - name: Build Bootable Multiboot2 ISO
+        run: |
+          make iso
+
+      - name: Check ISO size (< 20 MB limit)
+        run: |
+          ISO_SIZE_BYTES=$(stat -c%s nsk-os-0.3.iso)
+          ISO_SIZE_MB=$((ISO_SIZE_BYTES / 1024 / 1024))
+          echo "ISO size: ${ISO_SIZE_MB} MB (${ISO_SIZE_BYTES} bytes)"
+          if [ $ISO_SIZE_BYTES -gt 20971520 ]; then
+            echo "Error: ISO exceeds 20MB limit!"
+            exit 1
+          fi
+
+      - name: QEMU Headless Smoke Test (Verify Phase 1 Serial Output)
+        run: |
+          python3 tests/test_phase1.py
+
+      - name: Upload ISO Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nsk-os-0.3-iso
+          path: nsk-os-0.3.iso

@@ -1,6 +1,8 @@
-.cache/
-.build/
-NSK-OS.iso
-SHA256SUMS.txt
-build-info.txt
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
 *.log
+.env*
+!.env.example
