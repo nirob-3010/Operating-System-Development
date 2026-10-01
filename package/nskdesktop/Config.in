@@ -1,0 +1,4 @@
+config BR2_PACKAGE_NSKDESKTOP
+    bool "nskdesktop"
+    help
+      Minimal framebuffer desktop shell for NSK OS.

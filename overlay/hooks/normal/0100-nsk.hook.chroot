@@ -1,9 +1,0 @@
-#!/bin/sh
-set -e
-sed -i 's/^PRETTY_NAME=.*/PRETTY_NAME="NSK OS 0.3"/;s/^NAME=.*/NAME="NSK OS"/' /etc/os-release
-for d in Documents Pictures Music Videos Downloads; do mkdir -p /etc/skel/$d; done
-cat >> /etc/skel/.bashrc <<'X'
-PS1='\[\e[1;32m\]\u@\h\[\e[0m\]:\w\$ '
-alias ls='ls --color=auto'
-X
-chmod +x /usr/local/bin/neofetch /usr/share/nsk/server.py /etc/skel/.xinitrc
