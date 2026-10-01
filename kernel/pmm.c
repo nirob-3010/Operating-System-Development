@@ -61,7 +61,7 @@ void pmm_init(multiboot_info_parsed_t* mbi, uint32_t kernel_start, uint32_t kern
 
             uint32_t base_low = (uint32_t)(entry->addr & 0xFFFFFFFF);
             uint32_t len_low = (uint32_t)(entry->len & 0xFFFFFFFF);
-            kprintf("  Region %2u: [0x%p - 0x%p] %7u KB | Type: %s\n",
+            kprintf("  Region %2u: [%p - %p] %7u KB | Type: %s\n",
                     entry_idx++, base_low, base_low + len_low - 1, len_low / 1024, type_str);
 
             offset += entry->size + sizeof(entry->size);
@@ -82,7 +82,7 @@ void pmm_init(multiboot_info_parsed_t* mbi, uint32_t kernel_start, uint32_t kern
             }
             uint32_t base_low = (uint32_t)(entry->addr & 0xFFFFFFFF);
             uint32_t len_low = (uint32_t)(entry->len & 0xFFFFFFFF);
-            kprintf("  Region %2u: [0x%p - 0x%p] %7u KB | Type: %s\n",
+            kprintf("  Region %2u: [%p - %p] %7u KB | Type: %s\n",
                     i, base_low, base_low + len_low - 1, len_low / 1024, type_str);
         }
     } else {
@@ -176,7 +176,7 @@ void pmm_init(multiboot_info_parsed_t* mbi, uint32_t kernel_start, uint32_t kern
     kprintf("  Used Blocks: %u (%u KB)\n", pmm_used_blocks, (pmm_used_blocks * 4));
     kprintf("  Free Blocks: %u (%u MB)\n", (pmm_max_blocks - pmm_used_blocks),
             ((pmm_max_blocks - pmm_used_blocks) * 4) / 1024);
-    kprintf("  Bitmap Loc : 0x%p - 0x%p (%u KB)\n", bitmap_addr, bitmap_addr + bitmap_size_bytes, bitmap_size_bytes / 1024);
+    kprintf("  Bitmap Loc : %p - %p (%u KB)\n", bitmap_addr, bitmap_addr + bitmap_size_bytes, bitmap_size_bytes / 1024);
 }
 
 void* pmm_alloc_block(void) {

@@ -41,6 +41,14 @@ jobs:
         run: |
           python3 tests/test_phase1.py
 
+      - name: QEMU Graphics Engine Smoke Test (Verify Phase 2 Framebuffer & Glass Panel)
+        run: |
+          python3 tests/test_phase2.py
+
+      - name: QEMU Window Manager Smoke Test (Verify Phase 3 Desktop UI & Overlapping Windows)
+        run: |
+          python3 tests/test_phase3.py
+
       - name: Upload ISO Artifact
         uses: actions/upload-artifact@v4
         with:

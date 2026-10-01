@@ -7,7 +7,7 @@
 #include "types.h"
 
 #define KHEAP_START        0x00400000 // 4 MB mark (well above kernel binary and PMM bitmap)
-#define KHEAP_INITIAL_SIZE (16 * 1024 * 1024) // 16 MB initial heap pool
+#define KHEAP_INITIAL_SIZE (32 * 1024 * 1024) // 32 MB heap pool for graphics & backbuffer
 
 void  kheap_init(uint32_t start_addr, size_t size);
 void* kmalloc(size_t size);

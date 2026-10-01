@@ -33,7 +33,7 @@ void kheap_init(uint32_t start_addr, size_t size) {
     heap_start_block->next = NULL;
     heap_start_block->prev = NULL;
 
-    kprintf("[NSK HEAP] Kernel heap initialized at 0x%p (Size: %u MB)\n",
+    kprintf("[NSK HEAP] Kernel heap initialized at %p (Size: %u MB)\n",
             start_addr, size / (1024 * 1024));
 }
 

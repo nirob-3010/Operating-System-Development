@@ -19,7 +19,6 @@ mb1_header:
     dd MB1_MAGIC
     dd MB1_FLAGS
     dd MB1_CHECKSUM
-    dd 0, 0, 0, 0, 0                    ; AOUT kludge fields (unused for ELF)
     dd 0                                ; Mode type: 0 for linear framebuffer
     dd 1536                             ; Preferred width: 1536
     dd 1024                             ; Preferred height: 1024

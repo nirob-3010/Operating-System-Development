@@ -2,7 +2,7 @@
 """
 NSK OS v0.3 - Phase 1 QEMU Smoke Test
 Verifies kernel boots, displays banner, initializes GDT/IDT/PIC/PIT/PMM/Heap, and prints memory map.
-Supports both direct kernel binary boot (-kernel) and bootable ISO (-cdrom).
+Handles raw binary serial streams with resilient UTF-8 decoding (errors='replace').
 """
 
 import os
@@ -18,21 +18,23 @@ def run_test_with_cmd(cmd_desc, cmd):
         proc = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True
+            stderr=subprocess.PIPE
         )
 
-        # Allow sufficient time for QEMU and kernel to boot and print logs
         time.sleep(3)
         proc.terminate()
         try:
-            stdout, stderr = proc.communicate(timeout=4)
+            stdout_bytes, stderr_bytes = proc.communicate(timeout=4)
         except subprocess.TimeoutExpired:
             proc.kill()
-            stdout, stderr = proc.communicate()
+            stdout_bytes, stderr_bytes = proc.communicate()
+
+        # Safely decode raw binary serial bytes from QEMU UART/BIOS
+        stdout = stdout_bytes.decode('utf-8', errors='replace') if stdout_bytes else ""
+        stderr = stderr_bytes.decode('utf-8', errors='replace') if stderr_bytes else ""
 
         print("[TEST] Captured Serial Output:")
-        print(stdout if stdout else "(none)")
+        print(stdout if stdout.strip() else "(none)")
 
         if stderr and stderr.strip():
             print("[TEST] QEMU Stderr:")

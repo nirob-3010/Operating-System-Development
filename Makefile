@@ -11,13 +11,24 @@ OBJCOPY := objcopy
 CFLAGS  := -m32 -ffreestanding -O2 -Wall -Wextra -nostdlib -fno-builtin \
            -fno-stack-protector -fno-pie -fno-pic -Iinclude
 ASFLAGS := -f elf32
-LDFLAGS := -m elf_i386 -T linker.ld -nostdlib
+LDFLAGS := -m elf_i386 -T linker.ld -nostdlib -z noexecstack
+LIBGCC  := $(shell $(CC) -m32 -print-libgcc-file-name 2>/dev/null)
 
 BUILD_DIR := build
 ISO_DIR   := isodir
 ISO_NAME  := nsk-os-0.3.iso
 
 C_SRCS := kernel/kernel.c \
+          kernel/console.c \
+          kernel/bga.c \
+          kernel/gfx.c \
+          kernel/font.c \
+          kernel/wallpaper.c \
+          kernel/mouse.c \
+          kernel/keyboard.c \
+          kernel/wm.c \
+          kernel/phase2_demo.c \
+          kernel/phase3_demo.c \
           kernel/gdt.c \
           kernel/idt.c \
           kernel/pic.c \
@@ -27,7 +38,9 @@ C_SRCS := kernel/kernel.c \
           kernel/string.c \
           kernel/multiboot2.c \
           kernel/pmm.c \
-          kernel/kheap.c
+          kernel/kheap.c \
+          kernel/rtc.c \
+          kernel/sysinfo.c
 
 ASM_SRCS := boot/boot.asm \
             kernel/gdt_flush.asm \
@@ -55,7 +68,7 @@ $(BUILD_DIR)/kernel/%.o: kernel/%.c
 
 $(BUILD_DIR)/kernel.bin: $(ALL_OBJS) linker.ld
 	@mkdir -p $(BUILD_DIR)
-	$(LD) $(LDFLAGS) $(ALL_OBJS) -o $@
+	$(LD) $(LDFLAGS) $(ALL_OBJS) $(LIBGCC) -o $@
 	@echo ">>> [SUCCESS] Built Kernel Binary: $@"
 
 iso: $(BUILD_DIR)/kernel.bin boot/grub.cfg

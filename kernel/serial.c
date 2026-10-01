@@ -30,12 +30,12 @@ static int is_transmit_empty(void) {
 }
 
 void serial_putc(char c) {
-    // Wait for transmit buffer to empty, with timeout guard to prevent locking
     int timeout = 100000;
     while (!is_transmit_empty() && --timeout > 0) {
         io_wait();
     }
-    outb(COM1_PORT, (uint8_t)c);
+    // Mask to standard 7-bit ASCII to prevent any extended byte encoding issues
+    outb(COM1_PORT, (uint8_t)((unsigned char)c & 0x7F));
 }
 
 void serial_write(const char* str) {

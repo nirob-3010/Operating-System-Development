@@ -13,12 +13,14 @@ void* memset(void* dest, int val, size_t len) {
 }
 
 void* memcpy(void* dest, const void* src, size_t len) {
-    uint8_t* d = (uint8_t*)dest;
-    const uint8_t* s = (const uint8_t*)src;
-    for (size_t i = 0; i < len; i++) {
-        d[i] = s[i];
-    }
-    return dest;
+    // Word-at-a-time copy: this is the hot path for every framebuffer blit
+    // (wallpaper cache, desktop buffer, back-to-front swaps), so avoid a byte loop.
+    void* ret = dest;
+    size_t dwords = len >> 2;
+    size_t tail = len & 3;
+    __asm__ volatile ("cld; rep movsl" : "+D"(dest), "+S"(src), "+c"(dwords) : : "memory");
+    __asm__ volatile ("rep movsb"      : "+D"(dest), "+S"(src), "+c"(tail)   : : "memory");
+    return ret;
 }
 
 void* memmove(void* dest, const void* src, size_t len) {

@@ -155,3 +155,22 @@ NSK OS booting...
 - ফাস্ট বক্স ব্লার (গ্লাস প্যানেলের জন্য)
 - `stb_truetype` ফন্ট রেন্ডারার
 - ওয়ালপেপার বিটম্যাপ ইন্টিগ্রেশন
+
+---
+
+## Asset tools
+
+The wallpaper and the mouse cursor are generated, not hand-edited:
+
+```bash
+# Wallpaper: HOME.PNG -> kernel/wallpaper_home.h (24-bit, 768x512) + web preview JPEGs
+python3 tools/gen_wallpaper.py HOME.PNG \
+    --web src/assets/images/wallpaper_nsk_1790838490517.jpg
+
+# Cursor: anti-aliased arrow with outline + soft shadow -> include/cursor_sprite.h
+python3 tools/gen_cursor.py --preview /tmp/cursor_preview.png
+```
+
+Both need `pip install pillow`. The wallpaper is "cover" fitted at boot, so it is never
+stretched on non-3:2 screens. If you change the cursor size in `tools/gen_cursor.py`,
+update `MOUSE_CURSOR_*` in `include/mouse.h` too (a `_Static_assert` in `mouse.c` catches a mismatch).

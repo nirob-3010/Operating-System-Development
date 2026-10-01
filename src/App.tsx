@@ -266,7 +266,7 @@ export default function App() {
                 <div className="rounded-lg overflow-hidden border border-slate-200 mb-2">
                   <img src={wallpaperImg} alt="Preview" className="w-full h-48 object-cover" />
                 </div>
-                <span className="text-xs text-slate-500 font-medium">wallpaper_bloom_wave_1536x1024.png (Phase 2 Asset)</span>
+                <span className="text-xs text-slate-500 font-medium">HOME.PNG - Bloom wallpaper (kernel/wallpaper_home.h)</span>
               </div>
             )}
 

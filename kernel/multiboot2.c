@@ -29,6 +29,15 @@ void multiboot_parse(uint32_t magic, uint32_t addr, multiboot_info_parsed_t* par
             }
         }
         kprintf("[NSK MULTIBOOT] Bootloader: %s\n", parsed->bootloader_name);
+
+        if (parsed->mb1_info->flags & (1 << 12)) {
+            kprintf("[NSK MULTIBOOT] MB1 Framebuffer: %ux%u@%ubpp (Addr: %p, Pitch: %u)\n",
+                    parsed->mb1_info->framebuffer_width,
+                    parsed->mb1_info->framebuffer_height,
+                    parsed->mb1_info->framebuffer_bpp,
+                    (void*)(uint32_t)(parsed->mb1_info->framebuffer_addr & 0xFFFFFFFF),
+                    parsed->mb1_info->framebuffer_pitch);
+        }
         return;
     }
 

@@ -129,7 +129,7 @@ void idt_init(void) {
     idt_set_gate(47, (uint32_t)irq15, 0x08, 0x8E);
 
     __asm__ volatile ("lidt %0" : : "m"(idtp));
-    kprintf("[NSK IDT] Interrupt Descriptor Table loaded (256 gates, Base=0x%p)\n", idtp.base);
+    kprintf("[NSK IDT] Interrupt Descriptor Table loaded (256 gates, Base=%p)\n", idtp.base);
 }
 
 void isr_handler(registers_t* regs) {

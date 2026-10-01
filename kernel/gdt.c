@@ -41,5 +41,5 @@ void gdt_init(void) {
     gdt_set_gate(4, 0, 0xFFFFFFFF, 0xF2, 0xCF);
 
     gdt_flush((uint32_t)&gp);
-    kprintf("[NSK GDT] Global Descriptor Table initialized (5 entries, Base=0x%p)\n", gp.base);
+    kprintf("[NSK GDT] Global Descriptor Table initialized (5 entries, Base=%p)\n", gp.base);
 }

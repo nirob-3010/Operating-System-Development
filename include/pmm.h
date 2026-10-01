@@ -19,5 +19,7 @@ uint32_t pmm_get_used_memory(void);
 uint32_t pmm_get_free_memory(void);
 uint32_t pmm_get_total_blocks(void);
 uint32_t pmm_get_used_blocks(void);
+static inline uint32_t pmm_get_total_frames(void) { return pmm_get_total_blocks(); }
+static inline uint32_t pmm_get_used_frames(void)  { return pmm_get_used_blocks(); }
 
 #endif /* NSK_PMM_H */
