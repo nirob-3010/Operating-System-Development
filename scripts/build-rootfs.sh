@@ -40,7 +40,13 @@ info "Unpacking Tiny Core initramfs: $INITRD_NAME"
 # an unprivileged cpio extraction. Tiny Core recreates/uses runtime devices at
 # boot, so omit the packaged device nodes during remastering and keep /dev itself.
 mkdir -p "$INITRD_DIR/dev"
-gzip -dc "$BASE_INITRD" | (cd "$INITRD_DIR" && cpio -idm --quiet --no-absolute-filenames --no-preserve-owner --exclude='dev/*')
+# GNU cpio on GitHub's Ubuntu runner does not provide an --exclude option.
+# Build a filtered member list first, then extract only non-/dev entries. This
+# avoids privileged mknod operations while preserving the /dev directory itself.
+INITRD_LIST="$WORK/initrd-files.txt"
+gzip -dc "$BASE_INITRD" | cpio -t --quiet > "$INITRD_LIST"
+grep -vE '(^|/)dev(/|$)' "$INITRD_LIST" > "$WORK/initrd-files.filtered"
+(cd "$INITRD_DIR" && gzip -dc "$BASE_INITRD" | cpio -idm --quiet --no-absolute-filenames --no-preserve-owner < "$WORK/initrd-files.filtered")
 
 # Resolve Tiny Core .tcz dependencies recursively and scatter-install them.
 TC_VERSION="${TC_VERSION:-17.1}"
