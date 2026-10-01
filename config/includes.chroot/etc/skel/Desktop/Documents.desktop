@@ -1,5 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=Documents
-Icon=folder-documents
-Exec=thunar %U

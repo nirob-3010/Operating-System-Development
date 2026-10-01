@@ -1,5 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=Music
-Icon=folder-music
-Exec=audacious %U

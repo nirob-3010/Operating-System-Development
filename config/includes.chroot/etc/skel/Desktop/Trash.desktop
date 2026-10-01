@@ -1,5 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=Trash
-Icon=user-trash
-Exec=thunar trash:///

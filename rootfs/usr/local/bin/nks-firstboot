@@ -1,0 +1,5 @@
+#!/bin/sh
+# Prepare the user-facing folder set once per boot. Safe to run repeatedly.
+mkdir -p /home/tc/Documents /home/tc/Pictures /home/tc/Music /home/tc/Videos /home/tc/Downloads /home/tc/.Trash
+chown -R 1001:50 /home/tc/Documents /home/tc/Pictures /home/tc/Music /home/tc/Videos /home/tc/Downloads /home/tc/.Trash 2>/dev/null || true
+exit 0

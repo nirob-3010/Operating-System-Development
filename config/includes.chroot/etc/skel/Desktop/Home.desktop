@@ -1,5 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=Home
-Icon=user-home
-Exec=thunar %U

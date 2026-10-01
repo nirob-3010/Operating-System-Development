@@ -1,0 +1,14 @@
+#!/bin/sh
+if command -v Xdialog >/dev/null 2>&1; then
+  CHOICE=$(Xdialog --stdout --title "NSK OS" --menu "Power" 12 48 5 \
+    "Shutdown" "Power off the computer" \
+    "Restart" "Reboot the computer" \
+    "Logout" "Leave the graphical session" 2>/dev/null) || exit 0
+else
+  CHOICE=Logout
+fi
+case "$CHOICE" in
+  Shutdown) sudo poweroff || poweroff || halt ;;
+  Restart) sudo reboot || reboot ;;
+  Logout) pkill -TERM jwm 2>/dev/null || true ;;
+esac

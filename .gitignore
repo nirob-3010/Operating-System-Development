@@ -1,11 +1,6 @@
-*.iso
-*.iso.sha256
-binary/
-cache/
-chroot/
-common/
-source/
-stage/
-work/
+.cache/
+.build/
+NSK-OS.iso
+SHA256SUMS.txt
+build-info.txt
 *.log
-.DS_Store

@@ -1,0 +1,6 @@
+#!/bin/sh
+load=$(awk '{print $1}' /proc/loadavg 2>/dev/null)
+mem=$(awk '/MemTotal/ {t=$2} /MemAvailable/ {a=$2} END {if(t>0) printf "%.0f%%", (t-a)*100/t}' /proc/meminfo 2>/dev/null)
+ip=$(hostname -I 2>/dev/null | awk '{print $1}')
+[ -n "$ip" ] || ip="offline"
+printf 'LOAD %s   RAM %s   %s' "${load:-?}" "${mem:-?}" "$ip"

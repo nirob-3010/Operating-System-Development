@@ -1,6 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=NSK Desktop Session
-Exec=/usr/local/bin/nsk-session-init
-OnlyShowIn=XFCE;
-X-GNOME-Autostart-enabled=true

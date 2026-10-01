@@ -1,5 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=Pictures
-Icon=folder-pictures
-Exec=thunar %U
