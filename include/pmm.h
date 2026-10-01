@@ -10,7 +10,7 @@
 #define PMM_BLOCK_SIZE     4096 // 4 KB page frames
 #define PMM_BLOCKS_PER_BYTE 8
 
-void pmm_init(struct multiboot_tag_mmap* mmap, uint32_t kernel_start, uint32_t kernel_end);
+void pmm_init(multiboot_info_parsed_t* mbi, uint32_t kernel_start, uint32_t kernel_end);
 void* pmm_alloc_block(void);
 void  pmm_free_block(void* ptr);
 

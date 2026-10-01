@@ -1,8 +1,0 @@
-#!/bin/sh
-printf '\nNSK OS 1.0\nLightweight Desktop Operating System\n\n'
-printf 'Hostname : '; hostname 2>/dev/null || true
-printf 'Kernel   : '; uname -r 2>/dev/null || true
-printf 'Arch     : '; uname -m 2>/dev/null || true
-printf 'Uptime   : '; uptime 2>/dev/null || true
-printf '\nMemory:\n'; free -h 2>/dev/null || cat /proc/meminfo | head -n 4
-printf '\nDisk:\n'; df -h / 2>/dev/null

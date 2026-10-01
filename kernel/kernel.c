@@ -1,7 +1,7 @@
 /**
  * NSK OS v0.3 - Core Kernel Main Entry Point (Phase 1)
  * Target: x86 (i686 Protected Mode, 32-bit)
- * Bootloader: Multiboot2 (GRUB)
+ * Bootloader: Multiboot 1 / Multiboot 2 (GRUB / QEMU)
  */
 
 #include "types.h"
@@ -16,7 +16,6 @@
 #include "kheap.h"
 #include "string.h"
 
-// Defined in linker.ld
 extern uint32_t _kernel_start;
 extern uint32_t _kernel_end;
 
@@ -39,8 +38,8 @@ void kmain(uint32_t magic, uint32_t addr) {
     kprintf("[NSK KERNEL] Kernel binary loaded at 0x%p - 0x%p (Size: %u KB)\n",
             kstart, kend, (kend - kstart + 1023) / 1024);
 
-    // Step 3: Parse Multiboot2 Information Structure
-    multiboot2_parse(magic, addr, &mbi_info);
+    // Step 3: Parse Multiboot Information Structure (supports both MB1 and MB2)
+    multiboot_parse(magic, addr, &mbi_info);
 
     // Step 4: Initialize Global Descriptor Table (GDT)
     gdt_init();
@@ -54,12 +53,10 @@ void kmain(uint32_t magic, uint32_t addr) {
     // Step 7: Initialize PIT (Programmable Interval Timer) at 100 Hz
     pit_init(PIT_TARGET_HZ);
 
-    // Step 8: Initialize Physical Memory Manager (PMM) from Multiboot2 Memory Map
-    // (Meets test criteria: prints the memory map to serial)
-    pmm_init(mbi_info.mmap_tag, kstart, kend);
+    // Step 8: Initialize Physical Memory Manager (PMM) from Memory Map
+    pmm_init(&mbi_info, kstart, kend);
 
     // Step 9: Initialize Dynamic Kernel Heap (kmalloc / kfree)
-    // Starting at 4MB mark (above kernel and PMM bitmap)
     kheap_init(KHEAP_START, KHEAP_INITIAL_SIZE);
 
     // Step 10: Run Heap Self-Test

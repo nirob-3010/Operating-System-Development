@@ -1,2 +1,0 @@
-#!/bin/sh
-exec aterm -title "NSK System Monitor" -fn "DejaVu Sans Mono:size=10" -e sh -lc 'while :; do clear; echo "NSK OS — System Monitor"; echo; uname -a; echo; free -h; echo; df -h /; echo; echo "Top processes:"; ps w | head -n 12; sleep 3; done'

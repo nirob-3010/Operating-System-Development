@@ -13,9 +13,10 @@ SECTIONS
 
     _kernel_start = .;
 
-    /* Multiboot2 header MUST come first within first 32 KB */
-    .multiboot2 ALIGN(8) :
+    /* Multiboot headers MUST come first within first 8 KB of the binary */
+    .multiboot ALIGN(8) :
     {
+        KEEP(*(.multiboot1))
         KEEP(*(.multiboot2))
     }
 
