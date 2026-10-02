@@ -50,6 +50,7 @@ void      wm_focus_window(window_t* win);
 void      wm_close_window(window_t* win);
 void      wm_minimize_window(window_t* win);
 void      wm_restore_window(window_t* win);
+window_t* wm_find_window_by_title(const char* title);
 
 // Interaction & Rendering
 void      wm_process_events(void);

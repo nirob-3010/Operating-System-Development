@@ -367,7 +367,7 @@ static void wm_dock_layout(dock_layout_t* L) {
     }
 }
 
-static window_t* wm_find_window_by_title(const char* title) {
+window_t* wm_find_window_by_title(const char* title) {
     if (!title) return NULL;
     for (int i = 0; i < num_windows; i++) {
         if (strcmp(windows[i].title, title) == 0) return &windows[i];
