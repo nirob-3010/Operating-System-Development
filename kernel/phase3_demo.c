@@ -263,14 +263,35 @@ void phase3_desktop_init(void) {
     // 2. Initialize Window Manager & Light Bloom Wallpaper Cache
     wm_init();
 
-    // Clean desktop on startup: no automatic windows opened
+    // 3. Pre-register core application windows (minimized to Dock on startup for clean desktop)
+    int win1_w = (width > 600) ? 540 : (width - 60);
+    int win1_h = 380;
+    int win1_x = 90;
+    int win1_y = 52;
+    window_t* win1 = wm_create_window("File Manager", win1_x, win1_y, win1_w, win1_h,
+                                     render_file_manager_client, NULL);
+
+    int win2_w = (width > 600) ? 520 : (width - 60);
+    int win2_h = 360;
+    int win2_x = (width > 600) ? ((int)width - win2_w - 40) : 120;
+    int win2_y = 180;
+    window_t* win2 = wm_create_window("NSK Terminal", win2_x, win2_y, win2_w, win2_h,
+                                      render_terminal_client, NULL);
+
+    kprintf("[NSK WM] Created Window 1: \"File Manager\" [Left]\n");
+    kprintf("[NSK WM] Created Window 2: \"NSK Terminal\" [Overlapping Right]\n");
+
+    // Clean desktop on startup: windows are docked in the Dock, ready to open on click
+    if (win1) win1->is_minimized = true;
+    if (win2) win2->is_minimized = true;
+
     kprintf("[NSK WM] Clean Desktop Initialized. Applications accessible via Dock and Shortcuts.\n");
     kprintf("[NSK WM] ==============================================================\n");
     kprintf("[NSK WM]       >>> PHASE 3 DESKTOP UI & WINDOW MANAGER ACTIVE <<<       \n");
     kprintf("[NSK WM] Clean Desktop + Floating Dock + Top Bar + Responsive Windows   \n");
     kprintf("[NSK WM] ==============================================================\n\n");
 
-    // 3. Initial Render Pass
+    // 4. Initial Render Pass
     wm_render();
 
     // 4. Interactive Event Loop
