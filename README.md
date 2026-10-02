@@ -174,3 +174,16 @@ python3 tools/gen_cursor.py --preview /tmp/cursor_preview.png
 Both need `pip install pillow`. The wallpaper is "cover" fitted at boot, so it is never
 stretched on non-3:2 screens. If you change the cursor size in `tools/gen_cursor.py`,
 update `MOUSE_CURSOR_*` in `include/mouse.h` too (a `_Static_assert` in `mouse.c` catches a mismatch).
+
+### Dock icons
+
+The Dock uses the original icon artwork in `assets/dock_icons/*.jpeg`. They are never redrawn or recoloured:
+`tools/gen_dock_icons.py` only cuts the white JPEG backdrop to transparency and normalises size/padding, then writes
+`include/dock_icons.h` (kernel) and `src/assets/dock-icons/*.png` (React preview).
+
+```bash
+python3 tools/gen_dock_icons.py --preview /tmp/dock_icons_preview.png   # needs pillow, numpy, scipy
+```
+
+Dock items are bound to windows **by title** (see `dock_items[]` in `kernel/wm.c`), so a window created with
+`wm_create_window("Notes", ...)` automatically gets its Dock dot, minimize-to-Dock and click-to-restore.

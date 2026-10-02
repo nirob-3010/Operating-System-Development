@@ -18,6 +18,7 @@
 #include "sysinfo.h"
 #include "printf.h"
 #include "string.h"
+#include "dock_icons.h"
 
 static window_t  windows[WM_MAX_WINDOWS];
 static window_t* z_order[WM_MAX_WINDOWS];
@@ -297,71 +298,213 @@ static void wm_render_system_widget(void) {
     gfx_fill_rounded_rect_aa(wx + 14, meter_y + 14, ((ww - 28) * sys.disk_usage_pct) / 100, 6, 3, 0xFF0284C7);
 }
 
+// -----------------------------------------------------------------------------
+// Floating Dock (macOS-inspired)
+//   - the 8 app icons are the user's own artwork (include/dock_icons.h, generated from
+//     assets/dock_icons/*.jpeg by tools/gen_dock_icons.py) and are blitted 1:1, never recoloured
+//   - each item is bound to a window BY TITLE, so any window created with that title
+//     (e.g. wm_create_window("Notes", ...)) automatically gets a running dot, minimize-to-Dock
+//     and click-to-restore - no change to the window manager itself
+// -----------------------------------------------------------------------------
+
+enum { DOCK_KIND_APP = 0, DOCK_KIND_SEPARATOR, DOCK_KIND_TERMINAL, DOCK_KIND_TRASH };
+
+typedef struct {
+    int         kind;
+    int         icon;          // DOCK_ICON_* sprite index (DOCK_KIND_APP only)
+    const char* window_title;  // window this item launches / restores / shows state for
+} dock_item_t;
+
+static const dock_item_t dock_items[] = {
+    { DOCK_KIND_APP,       DOCK_ICON_FILES,      "File Manager" },
+    { DOCK_KIND_APP,       DOCK_ICON_BROWSER,    "Browser"      },
+    { DOCK_KIND_APP,       DOCK_ICON_PHOTOS,     "Photos"       },
+    { DOCK_KIND_APP,       DOCK_ICON_CALENDAR,   "Calendar"     },
+    { DOCK_KIND_APP,       DOCK_ICON_NOTES,      "Notes"        },
+    { DOCK_KIND_APP,       DOCK_ICON_CLOCK,      "Clock"        },
+    { DOCK_KIND_APP,       DOCK_ICON_CALCULATOR, "Calculator"   },
+    { DOCK_KIND_APP,       DOCK_ICON_SETTINGS,   "Settings"     },
+    { DOCK_KIND_SEPARATOR, 0,                    NULL           },
+    // Existing apps that are not part of the 8 icons keep their place right of the separator,
+    // so a minimized / closed Terminal can always be brought back from the Dock.
+    { DOCK_KIND_TERMINAL,  0,                    "NSK Terminal" },
+    { DOCK_KIND_TRASH,     0,                    NULL           },
+};
+#define DOCK_ITEM_COUNT ((int)(sizeof(dock_items) / sizeof(dock_items[0])))
+
+#define DOCK_PAD_X          12
+#define DOCK_PAD_TOP         6
+#define DOCK_PAD_BOTTOM     10   // room under the icon cell for the running dot
+#define DOCK_GAP             6
+#define DOCK_SEP_W          13
+#define DOCK_BOTTOM_MARGIN   8
+#define DOCK_RADIUS         24
+
+typedef struct {
+    int x, y, w, h;
+    int item_x[DOCK_ITEM_COUNT];
+} dock_layout_t;
+
+// One source of truth for geometry: used by both the renderer and the click hit-test
+static void wm_dock_layout(dock_layout_t* L) {
+    int total = DOCK_PAD_X * 2;
+    for (int i = 0; i < DOCK_ITEM_COUNT; i++) {
+        total += (dock_items[i].kind == DOCK_KIND_SEPARATOR) ? DOCK_SEP_W : DOCK_ICON_CELL;
+        if (i < DOCK_ITEM_COUNT - 1) total += DOCK_GAP;
+    }
+    L->w = total;
+    L->h = DOCK_PAD_TOP + DOCK_ICON_CELL + DOCK_PAD_BOTTOM;
+    L->x = ((int)screen_w - L->w) / 2;
+    if (L->x < 0) L->x = 0;
+    L->y = (int)screen_h - L->h - DOCK_BOTTOM_MARGIN;
+
+    int x = L->x + DOCK_PAD_X;
+    for (int i = 0; i < DOCK_ITEM_COUNT; i++) {
+        L->item_x[i] = x;
+        x += ((dock_items[i].kind == DOCK_KIND_SEPARATOR) ? DOCK_SEP_W : DOCK_ICON_CELL) + DOCK_GAP;
+    }
+}
+
+static window_t* wm_find_window_by_title(const char* title) {
+    if (!title) return NULL;
+    for (int i = 0; i < num_windows; i++) {
+        if (strcmp(windows[i].title, title) == 0) return &windows[i];
+    }
+    return NULL;
+}
+
+// Premultiplied-alpha sprite blit (the dock icon header stores premultiplied ARGB)
+static void wm_blit_premul(int dx, int dy, const uint32_t* src, int w, int h) {
+    uint32_t* bb = gfx_get_backbuffer();
+    if (!bb) return;
+    uint32_t pitch = gfx_get_pitch();
+    if (!pitch) pitch = screen_w;
+
+    for (int r = 0; r < h; r++) {
+        int py = dy + r;
+        if (py < 0 || py >= (int)screen_h) continue;
+        uint32_t* dst = &bb[(uint32_t)py * pitch];
+
+        for (int c = 0; c < w; c++) {
+            int px = dx + c;
+            if (px < 0 || px >= (int)screen_w) continue;
+
+            uint32_t p = src[r * w + c];
+            uint32_t a = p >> 24;
+            if (a == 0) continue;
+            if (a == 255) { dst[px] = p; continue; }
+
+            uint32_t d = dst[px];
+            uint32_t inv = 255 - a;
+            uint32_t rr = ((p >> 16) & 0xFF) + ((((d >> 16) & 0xFF) * inv + 127) / 255);
+            uint32_t gg = ((p >> 8)  & 0xFF) + ((((d >> 8)  & 0xFF) * inv + 127) / 255);
+            uint32_t bl = (p & 0xFF)         + (((d & 0xFF) * inv + 127) / 255);
+            if (rr > 255) rr = 255;
+            if (gg > 255) gg = 255;
+            if (bl > 255) bl = 255;
+            dst[px] = 0xFF000000 | (rr << 16) | (gg << 8) | bl;
+        }
+    }
+}
+
+// Existing Terminal tile (dark rounded square with ">_"), sized to match the new icon bodies
+static void wm_dock_draw_terminal(int cell_x, int cell_y) {
+    int pad = (DOCK_ICON_CELL - DOCK_ICON_BODY) / 2;
+    int bx = cell_x + pad, by = cell_y + pad;
+    gfx_fill_rounded_rect_aa(bx, by, DOCK_ICON_BODY, DOCK_ICON_BODY, 11, 0xFF1E293B);
+    gfx_draw_rounded_rect_aa(bx, by, DOCK_ICON_BODY, DOCK_ICON_BODY, 11, 0x30FFFFFF);
+    int tw = font_string_width(">_", 2);
+    int th = font_char_height(2);
+    font_draw_string(bx + (DOCK_ICON_BODY - tw) / 2, by + (DOCK_ICON_BODY - th) / 2, ">_", 0xFFFFFFFF, 2);
+}
+
+// Existing Trash tile (light rounded square) with a small bin glyph instead of the "[x]" text
+static void wm_dock_draw_trash(int cell_x, int cell_y) {
+    int pad = (DOCK_ICON_CELL - DOCK_ICON_BODY) / 2;
+    int bx = cell_x + pad, by = cell_y + pad;
+    gfx_fill_rounded_rect_aa(bx, by, DOCK_ICON_BODY, DOCK_ICON_BODY, 11, 0xFFF1F5F9);
+    gfx_draw_rounded_rect_aa(bx, by, DOCK_ICON_BODY, DOCK_ICON_BODY, 11, 0xFFCBD5E1);
+
+    uint32_t ink = 0xFF64748B;
+    int cx = bx + DOCK_ICON_BODY / 2;
+    gfx_fill_rounded_rect_aa(cx - 4, by + 11, 8, 3, 1, ink);          // handle
+    gfx_fill_rounded_rect_aa(cx - 11, by + 14, 22, 3, 1, ink);        // lid
+    gfx_fill_rounded_rect_aa(cx - 8, by + 18, 16, 15, 3, ink);        // bin body
+    gfx_fill_rect(cx - 4, by + 21, 1, 9, 0xFFF1F5F9);                 // ribs
+    gfx_fill_rect(cx,     by + 21, 1, 9, 0xFFF1F5F9);
+    gfx_fill_rect(cx + 4, by + 21, 1, 9, 0xFFF1F5F9);
+}
+
 static void wm_render_dock(void) {
-    int dock_w = 400;
-    int dock_h = 58;
-    int dock_x = ((int)screen_w - dock_w) / 2;
-    int dock_y = (int)screen_h - dock_h - 16;
-    int r = 22;
+    dock_layout_t L;
+    wm_dock_layout(&L);
 
-    gfx_draw_drop_shadow(dock_x, dock_y, dock_w, dock_h, r, 16, 0x22000000);
-    gfx_box_blur_rect(dock_x, dock_y, dock_w, dock_h, 10);
-    gfx_fill_rounded_rect_aa(dock_x, dock_y, dock_w, dock_h, r, 0xC4FFFFFF);
-    gfx_draw_rounded_rect_aa(dock_x, dock_y, dock_w, dock_h, r, 0x80FFFFFF);
+    // Floating glass container: soft shadow, blur, translucent fill, crisp edge
+    gfx_draw_drop_shadow(L.x, L.y, L.w, L.h, DOCK_RADIUS, 18, 0x26000000);
+    gfx_box_blur_rect(L.x, L.y, L.w, L.h, 10);
+    gfx_fill_rounded_rect_aa(L.x, L.y, L.w, L.h, DOCK_RADIUS, 0xB4FFFFFF);
+    gfx_draw_rounded_rect_aa(L.x - 1, L.y - 1, L.w + 2, L.h + 2, DOCK_RADIUS + 1, 0x14000000); // outer hairline
+    gfx_draw_rounded_rect_aa(L.x, L.y, L.w, L.h, DOCK_RADIUS, 0xA0FFFFFF);                    // inner highlight
 
-    int icon_size = 38;
-    int gap = 11;
-    int cur_x = dock_x + 14;
-    int icon_y = dock_y + 8;
+    int cell_y = L.y + DOCK_PAD_TOP;
 
-    // 1. Finder
-    gfx_fill_rounded_rect_aa(cur_x, icon_y, icon_size, icon_size, 10, 0xFF38BDF8);
-    gfx_fill_rounded_rect_aa(cur_x + 19, icon_y, 19, icon_size, 10, 0xFF0284C7);
-    font_draw_string(cur_x + 11, icon_y + 10, "^v^", 0xFFFFFFFF, 1);
-    gfx_fill_rounded_rect_aa(cur_x + 16, dock_y + dock_h - 6, 5, 5, 2, 0xFF0F172A);
-    cur_x += icon_size + gap;
+    for (int i = 0; i < DOCK_ITEM_COUNT; i++) {
+        const dock_item_t* it = &dock_items[i];
+        int x = L.item_x[i];
 
-    // 2. Web Browser
-    gfx_fill_rounded_rect_aa(cur_x, icon_y, icon_size, icon_size, 10, 0xFF0284C7);
-    gfx_fill_rounded_rect_aa(cur_x + 6, icon_y + 6, 26, 26, 13, 0xFF38BDF8);
-    gfx_fill_rounded_rect_aa(cur_x + 12, icon_y + 12, 14, 14, 7, 0xFF10B981);
-    cur_x += icon_size + gap;
+        if (it->kind == DOCK_KIND_SEPARATOR) {
+            gfx_fill_rect(x + DOCK_SEP_W / 2, cell_y + 8, 1, DOCK_ICON_CELL - 16, 0x30334155);
+            continue;
+        }
 
-    // 3. Azure Folder
-    gfx_fill_rounded_rect_aa(cur_x, icon_y + 3, icon_size, 32, 8, 0xFF38BDF8);
-    gfx_fill_rounded_rect_aa(cur_x + 3, icon_y + 7, icon_size - 6, 25, 6, 0xFF0284C7);
-    gfx_fill_rounded_rect_aa(cur_x + 16, dock_y + dock_h - 6, 5, 5, 2, 0xFF0F172A);
-    cur_x += icon_size + gap;
+        if (it->kind == DOCK_KIND_APP) {
+            wm_blit_premul(x, cell_y, dock_icon_pm[it->icon], DOCK_ICON_CELL, DOCK_ICON_CELL);
+        } else if (it->kind == DOCK_KIND_TERMINAL) {
+            wm_dock_draw_terminal(x, cell_y);
+        } else {
+            wm_dock_draw_trash(x, cell_y);
+        }
 
-    // 4. Photos
-    gfx_fill_rounded_rect_aa(cur_x, icon_y, icon_size, icon_size, 10, 0xFFFFFFFF);
-    gfx_draw_rounded_rect_aa(cur_x, icon_y, icon_size, icon_size, 10, 0xFFE2E8F0);
-    gfx_fill_rounded_rect_aa(cur_x + 10, icon_y + 10, 8, 8, 4, 0xFFEF4444);
-    gfx_fill_rounded_rect_aa(cur_x + 20, icon_y + 10, 8, 8, 4, 0xFFF59E0B);
-    gfx_fill_rounded_rect_aa(cur_x + 10, icon_y + 20, 8, 8, 4, 0xFF3B82F6);
-    gfx_fill_rounded_rect_aa(cur_x + 20, icon_y + 20, 8, 8, 4, 0xFF10B981);
-    cur_x += icon_size + gap;
+        // Running / minimized indicator under the icon:
+        //   solid dark dot = running, faded dot = minimized into the Dock, none = not running
+        window_t* win = wm_find_window_by_title(it->window_title);
+        if (win && !win->is_closed) {
+            uint32_t dot = win->is_minimized ? 0x80475569 : 0xFF1E293B;
+            gfx_fill_rounded_rect_aa(x + DOCK_ICON_CELL / 2 - 3, cell_y + DOCK_ICON_CELL + 1, 6, 6, 3, dot);
+        }
+    }
+}
 
-    // 5. Music
-    gfx_fill_rounded_rect_aa(cur_x, icon_y, icon_size, icon_size, 10, 0xFFEF4444);
-    font_draw_string(cur_x + 14, icon_y + 10, "~#", 0xFFFFFFFF, 1);
-    cur_x += icon_size + gap;
+// Click on the Dock. Returns true when the click landed on the Dock (so it must not fall
+// through to a window behind it).
+//   running window  -> focus / bring to front
+//   minimized       -> restore from the Dock
+//   closed          -> reopen
+//   no window       -> nothing happens (app has no window yet)
+static bool wm_dock_handle_click(int mx, int my) {
+    dock_layout_t L;
+    wm_dock_layout(&L);
 
-    // 6. Terminal
-    gfx_fill_rounded_rect_aa(cur_x, icon_y, icon_size, icon_size, 10, 0xFF1E293B);
-    font_draw_string(cur_x + 9, icon_y + 10, ">_", 0xFFFFFFFF, 1);
-    gfx_fill_rounded_rect_aa(cur_x + 16, dock_y + dock_h - 6, 5, 5, 2, 0xFF0F172A);
-    cur_x += icon_size + gap;
+    if (mx < L.x || mx >= L.x + L.w || my < L.y || my >= L.y + L.h) return false;
 
-    // 7. Settings
-    gfx_fill_rounded_rect_aa(cur_x, icon_y, icon_size, icon_size, 10, 0xFF64748B);
-    font_draw_string(cur_x + 13, icon_y + 10, "@*", 0xFFFFFFFF, 1);
-    cur_x += icon_size + gap;
+    int cell_y = L.y + DOCK_PAD_TOP;
+    for (int i = 0; i < DOCK_ITEM_COUNT; i++) {
+        const dock_item_t* it = &dock_items[i];
+        if (it->kind == DOCK_KIND_SEPARATOR) continue;
 
-    // 8. Trash
-    gfx_fill_rounded_rect_aa(cur_x, icon_y, icon_size, icon_size, 10, 0xFFF1F5F9);
-    gfx_draw_rounded_rect_aa(cur_x, icon_y, icon_size, icon_size, 10, 0xFFCBD5E1);
-    font_draw_string(cur_x + 11, icon_y + 10, "[x]", 0xFF64748B, 1);
+        int x = L.item_x[i];
+        // generous hit area: the whole cell plus the dot strip underneath
+        if (mx >= x - DOCK_GAP / 2 && mx < x + DOCK_ICON_CELL + DOCK_GAP / 2 &&
+            my >= cell_y && my < L.y + L.h) {
+            window_t* win = wm_find_window_by_title(it->window_title);
+            if (win) {
+                win->is_closed = false;
+                wm_restore_window(win);   // un-minimizes, focuses, raises, marks desktop dirty
+            }
+            break;
+        }
+    }
+    return true;
 }
 
 static void wm_render_window(window_t* win) {
@@ -580,6 +723,8 @@ void wm_process_events(void) {
     if (ms.clicked) {
         int mx = ms.x;
         int my = ms.y;
+
+        if (wm_dock_handle_click(mx, my)) return;
 
         for (int i = num_windows - 1; i >= 0; i--) {
             window_t* win = z_order[i];
