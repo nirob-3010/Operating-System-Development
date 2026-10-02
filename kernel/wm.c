@@ -19,6 +19,7 @@
 #include "printf.h"
 #include "string.h"
 #include "dock_icons.h"
+#include "phase3.h"
 
 static window_t  windows[WM_MAX_WINDOWS];
 static window_t* z_order[WM_MAX_WINDOWS];
@@ -37,6 +38,7 @@ static uint32_t  last_dynamic_sig = 0;
 
 static bool      start_menu_open = false;
 static window_t* dragging_window = NULL;
+static window_t* resizing_window = NULL;
 
 void wm_init(void) {
     screen_w = gfx_get_width();
@@ -500,6 +502,12 @@ static bool wm_dock_handle_click(int mx, int my) {
             if (win) {
                 win->is_closed = false;
                 wm_restore_window(win);   // un-minimizes, focuses, raises, marks desktop dirty
+            } else if (it->window_title) {
+                if (strcmp(it->window_title, "File Manager") == 0) {
+                    phase3_open_file_manager();
+                } else if (strcmp(it->window_title, "NSK Terminal") == 0) {
+                    phase3_open_terminal();
+                }
             }
             break;
         }
@@ -548,6 +556,13 @@ static void wm_render_window(window_t* win) {
     if (win->render_client) {
         win->render_client(win, client_x, client_y, client_w, client_h);
     }
+
+    // Bottom-right resize handle grip
+    int rx = wx + ww - 14;
+    int ry = wy + wh - 14;
+    gfx_fill_rect(rx + 6, ry + 6, 2, 2, 0xFF94A3B8);
+    gfx_fill_rect(rx + 2, ry + 6, 2, 2, 0xFF94A3B8);
+    gfx_fill_rect(rx + 6, ry + 2, 2, 2, 0xFF94A3B8);
 }
 
 // -----------------------------------------------------------------------------
@@ -696,6 +711,28 @@ void wm_process_events(void) {
     mouse_state_t ms;
     mouse_get_state(&ms);
 
+    if (resizing_window) {
+        if (ms.buttons & MOUSE_BTN_LEFT) {
+            int new_w = ms.x - resizing_window->x;
+            int new_h = ms.y - resizing_window->y;
+            if (new_w < 260) new_w = 260;
+            if (new_h < 180) new_h = 180;
+            if (resizing_window->x + new_w > (int)screen_w)
+                new_w = (int)screen_w - resizing_window->x;
+            if (resizing_window->y + new_h > (int)screen_h - 70)
+                new_h = (int)screen_h - 70 - resizing_window->y;
+
+            if (new_w != resizing_window->w || new_h != resizing_window->h) {
+                resizing_window->w = new_w;
+                resizing_window->h = new_h;
+                desktop_dirty = true;
+            }
+        } else {
+            resizing_window = NULL;
+            desktop_dirty = true;
+        }
+    }
+
     if (dragging_window) {
         if (ms.buttons & MOUSE_BTN_LEFT) {
             int new_x = ms.x - dragging_window->drag_offset_x;
@@ -726,6 +763,12 @@ void wm_process_events(void) {
 
         if (wm_dock_handle_click(mx, my)) return;
 
+        // Desktop icons click test: Left column shortcuts (Home, Documents, Pictures, Music, Trash)
+        if (mx >= 16 && mx <= 76 && my >= 40 && my <= 380) {
+            phase3_open_file_manager();
+            return;
+        }
+
         for (int i = num_windows - 1; i >= 0; i--) {
             window_t* win = z_order[i];
             if (!win || win->is_closed || win->is_minimized) continue;
@@ -736,6 +779,7 @@ void wm_process_events(void) {
                 wm_focus_window(win);
                 desktop_dirty = true;
 
+                // Window control buttons (Close, Minimize, Maximize)
                 if (my >= win->y + 8 && my <= win->y + 24) {
                     if (mx >= win->x + 12 && mx <= win->x + 28) {
                         wm_close_window(win);
@@ -768,6 +812,16 @@ void wm_process_events(void) {
                     }
                 }
 
+                // Bottom-right corner resize handle hit test
+                if (!win->is_maximized &&
+                    mx >= win->x + win->w - 20 && mx <= win->x + win->w &&
+                    my >= win->y + win->h - 20 && my <= win->y + win->h) {
+                    resizing_window = win;
+                    desktop_dirty = true;
+                    return;
+                }
+
+                // Title bar drag
                 if (my < win->y + WM_TITLEBAR_HEIGHT) {
                     win->is_dragging = true;
                     win->drag_offset_x = mx - win->x;

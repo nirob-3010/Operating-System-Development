@@ -1,26 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Minus, Plus, ChevronDown, X } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
 
 interface TerminalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onMinimize: () => void;
-  zIndex: number;
-  onFocus: () => void;
+  initialCwd?: string;
 }
 
-export const Terminal: React.FC<TerminalProps> = ({
-  isOpen,
-  onClose,
-  onMinimize,
-  zIndex,
-  onFocus
-}) => {
-  const [pos, setPos] = useState({ x: 856, y: 461 });
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+export const Terminal: React.FC<TerminalProps> = ({ initialCwd = '/home' }) => {
   const [inputCmd, setInputCmd] = useState('');
   const [history, setHistory] = useState<string[]>([]);
+  const [cwd, setCwd] = useState(initialCwd);
   const terminalEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -28,39 +16,16 @@ export const Terminal: React.FC<TerminalProps> = ({
     terminalEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [history]);
 
-  if (!isOpen) return null;
-
-  const handleMouseDown = (e: React.MouseEvent) => {
-    setIsDragging(true);
-    setDragOffset({
-      x: e.clientX - pos.x,
-      y: e.clientY - pos.y
-    });
-    onFocus();
-  };
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (isDragging) {
-      setPos({
-        x: Math.max(0, Math.min(900, e.clientX - dragOffset.x)),
-        y: Math.max(36, Math.min(600, e.clientY - dragOffset.y))
-      });
-    }
-  };
-
-  const handleMouseUp = () => {
-    setIsDragging(false);
-  };
-
   const executeCommand = (cmd: string) => {
     const trimmed = cmd.trim();
     if (!trimmed) {
-      setHistory(prev => [...prev, 'nsk@nskos:~$ ']);
+      setHistory(prev => [...prev, `nsk@nskos:${cwd}$ `]);
       return;
     }
 
-    const tokens = trimmed.split(' ');
+    const tokens = trimmed.split(/\s+/);
     const command = tokens[0].toLowerCase();
+    const arg = tokens.slice(1).join(' ');
     let response = '';
 
     switch (command) {
@@ -68,6 +33,7 @@ export const Terminal: React.FC<TerminalProps> = ({
         response = `NSK OS Built-in Shell v0.3 Commands:
   neofetch       - Display system specifications & NSK logo
   ls             - List directory contents
+  pwd            - Print working directory
   cd <dir>       - Change directory
   cat <file>     - Display file contents
   uname -a       - Show kernel architecture and release
@@ -79,12 +45,16 @@ export const Terminal: React.FC<TerminalProps> = ({
   reboot         - Trigger simulated kernel reset`;
         break;
 
+      case 'pwd':
+        response = cwd;
+        break;
+
       case 'uname':
         response = 'NSK-OS nsk-pc 0.3.0 #1 SMP PREEMPT Thu Oct 1 00:00:00 UTC 2026 i686 x86 GNU/NSK';
         break;
 
       case 'date':
-        response = 'Tue Sep 30 20:45:00 UTC 2026';
+        response = new Date().toUTCString();
         break;
 
       case 'clear':
@@ -93,15 +63,34 @@ export const Terminal: React.FC<TerminalProps> = ({
         return;
 
       case 'ls':
-        response = 'Documents/   Pictures/   Music/   Videos/   Downloads/   Trash/   welcome.txt';
+        response = 'Desktop/   Documents/   Downloads/   Pictures/   Music/   Videos/   Notes/   Applications/   Projects/   Trash/';
+        break;
+
+      case 'cd':
+        if (!arg || arg === '~' || arg === '/home') {
+          setCwd('/home');
+        } else if (arg === '..') {
+          setCwd('/home');
+        } else {
+          setCwd(`/home/${arg.replace(/^\//, '')}`);
+        }
+        response = '';
         break;
 
       case 'cat':
-        if (tokens[1] === 'welcome.txt') {
-          response = 'Welcome to NSK OS v0.3!\nBuilt from scratch with custom 32-bit x86 kernel, Multiboot2, and PMM.';
+        if (!arg) {
+          response = 'cat: missing file operand';
+        } else if (arg.includes('welcome')) {
+          response = 'Welcome to NSK OS v0.3!\nBare-metal 32-bit x86 Protected Mode OS with custom kernel and glass desktop.';
+        } else if (arg.includes('spec')) {
+          response = '# NSK OS Kernel Specs\nTarget: i686 x86 Protected Mode\nMultiboot2 specification compliant\nBitmap Physical Memory Manager\nKernel Heap kmalloc/kfree';
         } else {
-          response = `cat: ${tokens[1] || ''}: No such file or directory`;
+          response = `cat: ${arg}: No such file or directory`;
         }
+        break;
+
+      case 'echo':
+        response = arg;
         break;
 
       case 'meminfo':
@@ -131,7 +120,7 @@ export const Terminal: React.FC<TerminalProps> = ({
         break;
 
       case 'reboot':
-        response = 'Simulating ACPI/QEMU reboot... Resetting state.';
+        response = 'Simulating ACPI/QEMU reboot... Resetting OS state.';
         break;
 
       default:
@@ -139,7 +128,7 @@ export const Terminal: React.FC<TerminalProps> = ({
         break;
     }
 
-    setHistory(prev => [...prev, `nsk@nskos:~$ ${cmd}`, response]);
+    setHistory(prev => [...prev, `nsk@nskos:${cwd}$ ${cmd}`, response]);
     setInputCmd('');
   };
 
@@ -151,87 +140,42 @@ export const Terminal: React.FC<TerminalProps> = ({
 
   const pastelColors = [
     '#F87171', '#34D399', '#FBBF24', '#60A5FA',
-    '#F472B6', '#38BDF8', '#FB923C', '#A78BFA'
+    '#F472B6', '#38BDF8', '#FB923C', '#A78BFA',
   ];
 
   return (
     <div
-      style={{
-        left: `${pos.x}px`,
-        top: `${pos.y}px`,
-        width: '635px',
-        height: '392px',
-        zIndex
-      }}
-      onClick={() => {
-        onFocus();
-        inputRef.current?.focus();
-      }}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
-      className="absolute bg-white/95 backdrop-blur-2xl border border-white/80 shadow-2xl rounded-xl flex flex-col overflow-hidden select-none font-mono text-[13px]"
+      onClick={() => inputRef.current?.focus()}
+      className="flex-1 flex flex-col h-full bg-white/95 text-slate-800 font-mono text-[13px] overflow-hidden select-none"
     >
-      {/* Title Bar with Tabs */}
-      <div
-        onMouseDown={handleMouseDown}
-        className="h-9 px-3 flex items-center justify-between border-b border-slate-200/70 bg-gradient-to-b from-white/95 to-slate-100/70 cursor-move"
-      >
-        <div className="flex items-center gap-3">
-          {/* Traffic lights */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={(e) => { e.stopPropagation(); onClose(); }}
-              className="w-3 h-3 rounded-full bg-[#FF5F56] hover:brightness-90 transition-all flex items-center justify-center group"
-            >
-              <X className="w-2 h-2 text-black/60 opacity-0 group-hover:opacity-100" />
-            </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); onMinimize(); }}
-              className="w-3 h-3 rounded-full bg-[#FFBD2E] hover:brightness-90 transition-all flex items-center justify-center group"
-            >
-              <Minus className="w-2 h-2 text-black/60 opacity-0 group-hover:opacity-100" />
-            </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); }}
-              className="w-3 h-3 rounded-full bg-[#27C93F] hover:brightness-90 transition-all"
-            />
-          </div>
-
-          {/* Active Tab */}
-          <div className="flex items-center gap-2 bg-white/90 border border-slate-200/90 rounded-md px-3 py-1 shadow-2xs text-xs font-medium text-slate-700">
+      {/* Tab bar */}
+      <div className="h-8 px-3 flex items-center justify-between border-b border-slate-200/80 bg-slate-100/60 shrink-0">
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-md px-2.5 py-0.5 shadow-2xs text-xs font-sans font-medium text-slate-700">
             <span>NSK Terminal</span>
             <X className="w-3 h-3 text-slate-400 hover:text-slate-600 cursor-pointer" />
           </div>
-
-          {/* New Tab Button */}
           <button className="p-1 hover:bg-slate-200/60 rounded text-slate-500">
-            <Plus className="w-3.5 h-3.5" />
+            <Plus className="w-3 h-3" />
           </button>
         </div>
-
-        {/* Right Window Controls */}
-        <div className="flex items-center gap-3 text-slate-500">
-          <ChevronDown className="w-3.5 h-3.5 hover:text-slate-700 cursor-pointer" />
-          <button onClick={onClose} className="hover:text-slate-700">
-            <X className="w-3.5 h-3.5" />
-          </button>
+        <div className="text-[11px] text-slate-400 font-sans">
+          bash 5.2 • UTF-8
         </div>
       </div>
 
-      {/* Terminal Canvas Body */}
-      <div className="flex-1 p-4 overflow-y-auto leading-[19.5px] text-slate-800">
-        {/* Initial Neofetch Output matching mockup */}
+      {/* Terminal Output */}
+      <div className="flex-1 p-4 overflow-y-auto leading-[19.5px] select-text">
+        {/* Initial Neofetch Output */}
         <div className="mb-2">
           <span className="text-emerald-600 font-semibold">nsk@nskos</span>
           <span className="text-slate-400">:</span>
-          <span className="text-blue-600 font-semibold">~</span>
+          <span className="text-blue-600 font-semibold">{cwd}</span>
           <span className="text-slate-700">$ neofetch</span>
         </div>
 
-        {/* Neofetch Body: ASCII Logo on Left, Specs on Right */}
+        {/* Neofetch Body */}
         <div className="flex items-start gap-5 py-1">
-          {/* Ring ASCII Art */}
           <pre className="text-blue-600 text-[11px] leading-[13px] font-mono tracking-tight whitespace-pre select-text">
 {`          .-/+oossoo+/-.
       \`:ssssssssssssssss+:\`
@@ -253,23 +197,19 @@ export const Terminal: React.FC<TerminalProps> = ({
         \`.-/+ossssoo+-.`}
           </pre>
 
-          {/* Divider */}
           <div className="w-[1px] h-[190px] bg-slate-200/80 my-auto"></div>
 
-          {/* Specs Column */}
           <div className="flex-1 text-[12px] space-y-0.5 select-text pt-1">
             <div className="font-bold text-blue-600 text-[14px] pb-1">NSK OS v0.3</div>
             <div className="text-slate-700"><span className="text-blue-500 font-semibold">Host</span>       : NSK-PC</div>
-            <div className="text-slate-700"><span className="text-blue-500 font-semibold">Kernel</span>     : 0.3.0</div>
-            <div className="text-slate-700"><span className="text-blue-500 font-semibold">Uptime</span>     : 3m</div>
-            <div className="text-slate-700"><span className="text-blue-500 font-semibold">Shell</span>      : bash</div>
-            <div className="text-slate-700"><span className="text-blue-500 font-semibold">Resolution</span> : 1024x768</div>
-            <div className="text-slate-700"><span className="text-blue-500 font-semibold">DE</span>         : NSK Desktop</div>
-            <div className="text-slate-700"><span className="text-blue-500 font-semibold">WM</span>         : Window Manager</div>
-            <div className="text-slate-700"><span className="text-blue-500 font-semibold">Theme</span>      : Light</div>
-            <div className="text-slate-700"><span className="text-blue-500 font-semibold">Icons</span>      : Fluent</div>
+            <div className="text-slate-700"><span className="text-blue-500 font-semibold">Kernel</span>     : 0.3.0 (i686 Protected Mode)</div>
+            <div className="text-slate-700"><span className="text-blue-500 font-semibold">Uptime</span>     : Live Session</div>
+            <div className="text-slate-700"><span className="text-blue-500 font-semibold">Shell</span>      : NSK Shell v0.3</div>
+            <div className="text-slate-700"><span className="text-blue-500 font-semibold">FS</span>         : NSK Virtual Storage (/home)</div>
+            <div className="text-slate-700"><span className="text-blue-500 font-semibold">DE</span>         : macOS-Inspired Glass Desktop</div>
+            <div className="text-slate-700"><span className="text-blue-500 font-semibold">WM</span>         : NSK Window Manager</div>
+            <div className="text-slate-700"><span className="text-blue-500 font-semibold">Theme</span>      : Light Glass</div>
 
-            {/* Pastel Color Blocks */}
             <div className="flex items-center gap-1.5 pt-3">
               {pastelColors.map((color, idx) => (
                 <div
@@ -291,13 +231,14 @@ export const Terminal: React.FC<TerminalProps> = ({
               </div>
             );
           }
-          if (line.startsWith('nsk@nskos:~$')) {
+          if (line.startsWith('nsk@nskos:')) {
+            const parts = line.split('$ ');
             return (
               <div key={idx} className="mt-2">
                 <span className="text-emerald-600 font-semibold">nsk@nskos</span>
                 <span className="text-slate-400">:</span>
-                <span className="text-blue-600 font-semibold">~</span>
-                <span className="text-slate-700">{line.replace('nsk@nskos:~', '')}</span>
+                <span className="text-blue-600 font-semibold">{parts[0].replace('nsk@nskos:', '')}</span>
+                <span className="text-slate-700">$ {parts[1]}</span>
               </div>
             );
           }
@@ -308,11 +249,11 @@ export const Terminal: React.FC<TerminalProps> = ({
           );
         })}
 
-        {/* Interactive Prompt Line */}
+        {/* Command Input Prompt */}
         <div className="flex items-center gap-1 mt-2">
           <span className="text-emerald-600 font-semibold">nsk@nskos</span>
           <span className="text-slate-400">:</span>
-          <span className="text-blue-600 font-semibold">~</span>
+          <span className="text-blue-600 font-semibold">{cwd}</span>
           <span className="text-slate-700">$</span>
           <input
             ref={inputRef}
