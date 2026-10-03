@@ -1,6 +1,0 @@
-{
-  "name": "NSK OS v0.3",
-  "description": "NSK OS v0.3 - From-scratch x86 OS with custom kernel, Multiboot2, memory manager, and pixel-exact GUI desktop.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}
