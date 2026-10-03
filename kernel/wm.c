@@ -19,7 +19,6 @@
 #include "printf.h"
 #include "string.h"
 #include "dock_icons.h"
-#include "phase3.h"
 
 static window_t  windows[WM_MAX_WINDOWS];
 static window_t* z_order[WM_MAX_WINDOWS];
@@ -39,6 +38,14 @@ static uint32_t  last_dynamic_sig = 0;
 static bool      start_menu_open = false;
 static window_t* dragging_window = NULL;
 static window_t* resizing_window = NULL;
+static int resize_edges = 0;
+
+enum {
+    RESIZE_LEFT = 1,
+    RESIZE_RIGHT = 2,
+    RESIZE_TOP = 4,
+    RESIZE_BOTTOM = 8
+};
 
 void wm_init(void) {
     screen_w = gfx_get_width();
@@ -46,6 +53,8 @@ void wm_init(void) {
 
     num_windows = 0;
     dragging_window = NULL;
+    resizing_window = NULL;
+    resize_edges = 0;
     start_menu_open = false;
     desktop_dirty = true;
     last_cursor_x = -1;
@@ -94,6 +103,8 @@ window_t* wm_create_window(const char* title, int x, int y, int w, int h,
     win->is_closed = false;
     win->is_focused = false;
     win->is_dragging = false;
+    win->is_resizing = false;
+    win->resize_edges = 0;
     win->render_client = render_fn;
     win->on_click = click_fn;
     win->user_data = NULL;
@@ -145,6 +156,15 @@ void wm_close_window(window_t* win) {
         win->is_closed = true;
         win->is_focused = false;
         if (dragging_window == win) dragging_window = NULL;
+        if (resizing_window == win) resizing_window = NULL;
+        /* Focus the highest remaining visible window. */
+        for (int i = num_windows - 1; i >= 0; i--) {
+            window_t* next = z_order[i];
+            if (next && next != win && !next->is_closed && !next->is_minimized) {
+                wm_focus_window(next);
+                break;
+            }
+        }
         desktop_dirty = true;
     }
 }
@@ -187,6 +207,22 @@ static void wm_render_topbar(void) {
     // Left: Apple / OS Brand Icon & Text
     gfx_fill_rounded_rect_aa(12, 6, 14, 14, 7, 0xFF1E293B);
     font_draw_string(32, 6, "NSK OS", 0xFF0F172A, 1);
+
+    /* Dynamic application menu: the focused window owns the contextual menu. */
+    window_t* focused = NULL;
+    for (int i = num_windows - 1; i >= 0; i--) {
+        if (z_order[i] && !z_order[i]->is_closed && !z_order[i]->is_minimized && z_order[i]->is_focused) {
+            focused = z_order[i];
+            break;
+        }
+    }
+    if (focused) {
+        font_draw_string(86, 6, "|", 0x4094A3B8, 1);
+        font_draw_string(96, 6, focused->title, 0xFF334155, 1);
+        font_draw_string(190, 6, "File   Edit   View   Window   Help", 0xFF64748B, 1);
+    } else {
+        font_draw_string(86, 6, "|   Desktop   View   Window   Help", 0xFF64748B, 1);
+    }
 
     // Center: REAL LIVE DATE & TIME from Motherboard CMOS RTC
     char date_time_buf[64];
@@ -367,7 +403,7 @@ static void wm_dock_layout(dock_layout_t* L) {
     }
 }
 
-window_t* wm_find_window_by_title(const char* title) {
+static window_t* wm_find_window_by_title(const char* title) {
     if (!title) return NULL;
     for (int i = 0; i < num_windows; i++) {
         if (strcmp(windows[i].title, title) == 0) return &windows[i];
@@ -502,12 +538,6 @@ static bool wm_dock_handle_click(int mx, int my) {
             if (win) {
                 win->is_closed = false;
                 wm_restore_window(win);   // un-minimizes, focuses, raises, marks desktop dirty
-            } else if (it->window_title) {
-                if (strcmp(it->window_title, "File Manager") == 0) {
-                    phase3_open_file_manager();
-                } else if (strcmp(it->window_title, "NSK Terminal") == 0) {
-                    phase3_open_terminal();
-                }
             }
             break;
         }
@@ -556,13 +586,6 @@ static void wm_render_window(window_t* win) {
     if (win->render_client) {
         win->render_client(win, client_x, client_y, client_w, client_h);
     }
-
-    // Bottom-right resize handle grip
-    int rx = wx + ww - 14;
-    int ry = wy + wh - 14;
-    gfx_fill_rect(rx + 6, ry + 6, 2, 2, 0xFF94A3B8);
-    gfx_fill_rect(rx + 2, ry + 6, 2, 2, 0xFF94A3B8);
-    gfx_fill_rect(rx + 6, ry + 2, 2, 2, 0xFF94A3B8);
 }
 
 // -----------------------------------------------------------------------------
@@ -711,43 +734,64 @@ void wm_process_events(void) {
     mouse_state_t ms;
     mouse_get_state(&ms);
 
+    /* Continuous resize takes priority over click handling. */
     if (resizing_window) {
+        window_t* win = resizing_window;
         if (ms.buttons & MOUSE_BTN_LEFT) {
-            int new_w = ms.x - resizing_window->x;
-            int new_h = ms.y - resizing_window->y;
-            if (new_w < 260) new_w = 260;
-            if (new_h < 180) new_h = 180;
-            if (resizing_window->x + new_w > (int)screen_w)
-                new_w = (int)screen_w - resizing_window->x;
-            if (resizing_window->y + new_h > (int)screen_h - 70)
-                new_h = (int)screen_h - 70 - resizing_window->y;
+            int dx = ms.x - win->drag_offset_x;
+            int dy = ms.y - win->drag_offset_y;
+            int nx = win->x, ny = win->y, nw = win->w, nh = win->h;
 
-            if (new_w != resizing_window->w || new_h != resizing_window->h) {
-                resizing_window->w = new_w;
-                resizing_window->h = new_h;
-                desktop_dirty = true;
+            if (resize_edges & RESIZE_RIGHT) nw += dx;
+            if (resize_edges & RESIZE_BOTTOM) nh += dy;
+            if (resize_edges & RESIZE_LEFT) { nx += dx; nw -= dx; }
+            if (resize_edges & RESIZE_TOP) { ny += dy; nh -= dy; }
+
+            if (nw < WM_MIN_WINDOW_W) {
+                if (resize_edges & RESIZE_LEFT) nx = win->x + win->w - WM_MIN_WINDOW_W;
+                nw = WM_MIN_WINDOW_W;
             }
+            if (nh < WM_MIN_WINDOW_H) {
+                if (resize_edges & RESIZE_TOP) ny = win->y + win->h - WM_MIN_WINDOW_H;
+                nh = WM_MIN_WINDOW_H;
+            }
+
+            if (nx < 0) { if (resize_edges & RESIZE_LEFT) nw += nx; nx = 0; }
+            if (ny < WM_TOPBAR_HEIGHT) { if (resize_edges & RESIZE_TOP) nh -= (WM_TOPBAR_HEIGHT - ny); ny = WM_TOPBAR_HEIGHT; }
+            if (nx + nw > (int)screen_w) nw = (int)screen_w - nx;
+            if (ny + nh > (int)screen_h - WM_TASKBAR_HEIGHT) nh = (int)screen_h - WM_TASKBAR_HEIGHT - ny;
+
+            if (nw < WM_MIN_WINDOW_W) nw = WM_MIN_WINDOW_W;
+            if (nh < WM_MIN_WINDOW_H) nh = WM_MIN_WINDOW_H;
+
+            win->x = nx; win->y = ny; win->w = nw; win->h = nh;
+            win->is_maximized = false;
+            win->drag_offset_x = ms.x;
+            win->drag_offset_y = ms.y;
+            desktop_dirty = true;
         } else {
+            win->is_resizing = false;
             resizing_window = NULL;
+            resize_edges = 0;
             desktop_dirty = true;
         }
+        return;
     }
 
     if (dragging_window) {
         if (ms.buttons & MOUSE_BTN_LEFT) {
-            int new_x = ms.x - dragging_window->drag_offset_x;
-            int new_y = ms.y - dragging_window->drag_offset_y;
+            window_t* win = dragging_window;
+            int new_x = ms.x - win->drag_offset_x;
+            int new_y = ms.y - win->drag_offset_y;
 
             if (new_x < 0) new_x = 0;
-            if (new_y < 26) new_y = 26;
-            if (new_x + dragging_window->w > (int)screen_w)
-                new_x = (int)screen_w - dragging_window->w;
-            if (new_y + dragging_window->h > (int)screen_h - 70)
-                new_y = (int)screen_h - 70 - dragging_window->h;
+            if (new_y < WM_TOPBAR_HEIGHT) new_y = WM_TOPBAR_HEIGHT;
+            if (new_x + win->w > (int)screen_w) new_x = (int)screen_w - win->w;
+            if (new_y + win->h > (int)screen_h - WM_TASKBAR_HEIGHT)
+                new_y = (int)screen_h - WM_TASKBAR_HEIGHT - win->h;
 
-            if (new_x != dragging_window->x || new_y != dragging_window->y) {
-                dragging_window->x = new_x;
-                dragging_window->y = new_y;
+            if (new_x != win->x || new_y != win->y) {
+                win->x = new_x; win->y = new_y;
                 desktop_dirty = true;
             }
         } else {
@@ -755,88 +799,88 @@ void wm_process_events(void) {
             dragging_window = NULL;
             desktop_dirty = true;
         }
+        return;
     }
 
-    if (ms.clicked) {
-        int mx = ms.x;
-        int my = ms.y;
+    if (!ms.clicked) return;
 
-        if (wm_dock_handle_click(mx, my)) return;
+    int mx = ms.x;
+    int my = ms.y;
 
-        // Desktop icons click test: Left column shortcuts (Home, Documents, Pictures, Music, Trash)
-        if (mx >= 16 && mx <= 76 && my >= 40 && my <= 380) {
-            phase3_open_file_manager();
-            return;
-        }
+    if (wm_dock_handle_click(mx, my)) return;
 
-        for (int i = num_windows - 1; i >= 0; i--) {
-            window_t* win = z_order[i];
-            if (!win || win->is_closed || win->is_minimized) continue;
+    for (int i = num_windows - 1; i >= 0; i--) {
+        window_t* win = z_order[i];
+        if (!win || win->is_closed || win->is_minimized) continue;
 
-            if (mx >= win->x && mx <= win->x + win->w &&
-                my >= win->y && my <= win->y + win->h) {
+        if (mx >= win->x && mx <= win->x + win->w &&
+            my >= win->y && my <= win->y + win->h) {
 
-                wm_focus_window(win);
-                desktop_dirty = true;
+            wm_focus_window(win);
+            desktop_dirty = true;
 
-                // Window control buttons (Close, Minimize, Maximize)
-                if (my >= win->y + 8 && my <= win->y + 24) {
-                    if (mx >= win->x + 12 && mx <= win->x + 28) {
-                        wm_close_window(win);
-                        return;
-                    }
-                    if (mx >= win->x + 30 && mx <= win->x + 46) {
-                        wm_minimize_window(win);
-                        return;
-                    }
-                    if (mx >= win->x + 48 && mx <= win->x + 64) {
-                        if (win->is_maximized) {
-                            win->x = win->orig_x;
-                            win->y = win->orig_y;
-                            win->w = win->orig_w;
-                            win->h = win->orig_h;
-                            win->is_maximized = false;
-                        } else {
-                            win->orig_x = win->x;
-                            win->orig_y = win->y;
-                            win->orig_w = win->w;
-                            win->orig_h = win->h;
-                            win->x = 20;
-                            win->y = 36;
-                            win->w = (int)screen_w - 40;
-                            win->h = (int)screen_h - 110;
-                            win->is_maximized = true;
-                        }
-                        desktop_dirty = true;
-                        return;
-                    }
+            /* Window controls occupy the left side of the title bar. */
+            if (my >= win->y + 8 && my <= win->y + 26) {
+                if (mx >= win->x + 12 && mx <= win->x + 28) {
+                    wm_close_window(win);
+                    return;
                 }
+                if (mx >= win->x + 30 && mx <= win->x + 46) {
+                    wm_minimize_window(win);
+                    return;
+                }
+                if (mx >= win->x + 48 && mx <= win->x + 64) {
+                    if (win->is_maximized) {
+                        win->x = win->orig_x; win->y = win->orig_y;
+                        win->w = win->orig_w; win->h = win->orig_h;
+                        win->is_maximized = false;
+                    } else {
+                        win->orig_x = win->x; win->orig_y = win->y;
+                        win->orig_w = win->w; win->orig_h = win->h;
+                        win->x = 4; win->y = WM_TOPBAR_HEIGHT + 2;
+                        win->w = (int)screen_w - 8;
+                        win->h = (int)screen_h - WM_TOPBAR_HEIGHT - WM_TASKBAR_HEIGHT - 12;
+                        if (win->h < WM_MIN_WINDOW_H) win->h = WM_MIN_WINDOW_H;
+                        win->is_maximized = true;
+                    }
+                    desktop_dirty = true;
+                    return;
+                }
+            }
 
-                // Bottom-right corner resize handle hit test
-                if (!win->is_maximized &&
-                    mx >= win->x + win->w - 20 && mx <= win->x + win->w &&
-                    my >= win->y + win->h - 20 && my <= win->y + win->h) {
+            /* Edge/corner resize hit testing. */
+            {
+                int edge = 0;
+                const int grip = 6;
+                if (mx >= win->x && mx < win->x + grip) edge |= RESIZE_LEFT;
+                if (mx > win->x + win->w - grip && mx <= win->x + win->w) edge |= RESIZE_RIGHT;
+                if (my >= win->y && my < win->y + grip) edge |= RESIZE_TOP;
+                if (my > win->y + win->h - grip && my <= win->y + win->h) edge |= RESIZE_BOTTOM;
+                if (edge && !win->is_maximized) {
+                    win->is_resizing = true;
+                    win->resize_edges = edge;
                     resizing_window = win;
-                    desktop_dirty = true;
+                    resize_edges = edge;
+                    win->drag_offset_x = mx;
+                    win->drag_offset_y = my;
                     return;
                 }
+            }
 
-                // Title bar drag
-                if (my < win->y + WM_TITLEBAR_HEIGHT) {
-                    win->is_dragging = true;
-                    win->drag_offset_x = mx - win->x;
-                    win->drag_offset_y = my - win->y;
-                    dragging_window = win;
-                    desktop_dirty = true;
-                    return;
-                }
-
-                if (win->on_click) {
-                    win->on_click(win, mx - win->x, my - win->y);
-                    desktop_dirty = true;
-                }
+            if (my < win->y + WM_TITLEBAR_HEIGHT && !win->is_maximized) {
+                win->is_dragging = true;
+                win->drag_offset_x = mx - win->x;
+                win->drag_offset_y = my - win->y;
+                dragging_window = win;
+                desktop_dirty = true;
                 return;
             }
+
+            if (win->on_click) {
+                win->on_click(win, mx - win->x, my - win->y);
+                desktop_dirty = true;
+            }
+            return;
         }
     }
 }

@@ -5,7 +5,5 @@
 #define NSK_PHASE3_H
 
 void phase3_desktop_init(void);
-void phase3_open_file_manager(void);
-void phase3_open_terminal(void);
 
 #endif /* NSK_PHASE3_H */

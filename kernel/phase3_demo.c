@@ -15,6 +15,35 @@
 #include "sysinfo.h"
 #include "printf.h"
 #include "string.h"
+#include "dock_icons.h"
+
+
+static void render_file_icon(int x, int y, int size) {
+    /* Reuse the existing file.jpeg-derived artwork; only scale it for folder cells. */
+    uint32_t* bb = gfx_get_backbuffer();
+    uint32_t pitch = gfx_get_pitch(); if (!pitch) pitch = gfx_get_width();
+    if (!bb) return;
+    for (int py = 0; py < size; py++) {
+        int sy = (py * DOCK_ICON_CELL) / size;
+        for (int px = 0; px < size; px++) {
+            int sx = (px * DOCK_ICON_CELL) / size;
+            uint32_t p = dock_icon_pm[DOCK_ICON_FILES][sy * DOCK_ICON_CELL + sx];
+            uint32_t a = p >> 24;
+            if (!a) continue;
+            int dx=x+px, dy=y+py;
+            if (dx < 0 || dy < 0 || dx >= (int)gfx_get_width() || dy >= (int)gfx_get_height()) continue;
+            uint32_t* d=&bb[(uint32_t)dy*pitch+(uint32_t)dx];
+            if (a==255) *d=p;
+            else {
+                uint32_t inv=255-a, old=*d;
+                uint32_t r=((p>>16)&255)+((((old>>16)&255)*inv+127)/255);
+                uint32_t g=((p>>8)&255)+((((old>>8)&255)*inv+127)/255);
+                uint32_t b=(p&255)+(((old&255)*inv+127)/255);
+                *d=0xFF000000|((r>255?255:r)<<16)|((g>255?255:g)<<8)|(b>255?255:b);
+            }
+        }
+    }
+}
 
 // -----------------------------------------------------------------------------
 // Window 1: File Manager Client Area (Exact Reference Replica)
@@ -88,10 +117,7 @@ static void render_file_manager_client(window_t* win, int cx, int cy, int cw, in
         int fx = grid_x + (col * 84);
         int fy = grid_y;
 
-        // Big Azure Fluent Folder Icon
-        gfx_fill_rounded_rect_aa(fx, fy, 46, 36, 8, 0xFF38BDF8); // Fluent Sky-Blue
-        gfx_fill_rounded_rect_aa(fx + 2, fy + 5, 42, 29, 6, 0xFF0284C7); // Inner azure fold
-        gfx_fill_rounded_rect_aa(fx + 6, fy + 2, 18, 7, 3, 0xFF38BDF8); // Folder tab
+        render_file_icon(fx, fy - 4, 52);
 
         // Label below
         font_draw_string(fx - 4, fy + 42, folders_r1[col], 0xFF1E293B, 1);
@@ -100,11 +126,9 @@ static void render_file_manager_client(window_t* win, int cx, int cy, int cw, in
     // Row 2: Downloads (with arrow), Trash (recycle bin)
     int r2_y = grid_y + 68;
 
-    // Downloads
+    // Downloads: same existing File Manager artwork, with text identifying the folder.
     int dx = grid_x;
-    gfx_fill_rounded_rect_aa(dx, r2_y, 46, 36, 8, 0xFF38BDF8);
-    gfx_fill_rounded_rect_aa(dx + 2, r2_y + 5, 42, 29, 6, 0xFF0284C7);
-    font_draw_string(dx + 16, r2_y + 11, "|v|", 0xFFFFFFFF, 1);
+    render_file_icon(dx, r2_y - 4, 52);
     font_draw_string(dx - 4, r2_y + 42, "Downloads", 0xFF1E293B, 1);
 
     // Trash
@@ -215,43 +239,8 @@ static void render_terminal_client(window_t* win, int cx, int cy, int cw, int ch
     gfx_fill_rounded_rect_aa(cx + 104, py + 1, 7, 12, 1, 0xFF1E293B);
 }
 
-void phase3_open_file_manager(void) {
-    window_t* win = wm_find_window_by_title("File Manager");
-    if (win) {
-        win->is_closed = false;
-        wm_restore_window(win);
-        return;
-    }
-    uint32_t width = gfx_get_width();
-    int win1_w = (width > 600) ? 540 : (width - 60);
-    int win1_h = 380;
-    int win1_x = 90;
-    int win1_y = 52;
-
-    wm_create_window("File Manager", win1_x, win1_y, win1_w, win1_h,
-                     render_file_manager_client, NULL);
-}
-
-void phase3_open_terminal(void) {
-    window_t* win = wm_find_window_by_title("NSK Terminal");
-    if (win) {
-        win->is_closed = false;
-        wm_restore_window(win);
-        return;
-    }
-    uint32_t width = gfx_get_width();
-    int win2_w = (width > 600) ? 520 : (width - 60);
-    int win2_h = 360;
-    int win2_x = (width > 600) ? ((int)width - win2_w - 40) : 120;
-    int win2_y = 180;
-
-    window_t* win2 = wm_create_window("NSK Terminal", win2_x, win2_y, win2_w, win2_h,
-                                      render_terminal_client, NULL);
-    wm_focus_window(win2);
-}
-
 void phase3_desktop_init(void) {
-    kprintf("\n[NSK WM] Initializing Phase 3 Desktop UI (Clean Bootable Desktop)...\n");
+    kprintf("\n[NSK WM] Initializing Phase 3 Desktop UI (Bloom Light Theme)...\n");
 
     uint32_t width = gfx_get_width();
     uint32_t height = gfx_get_height();
@@ -263,38 +252,40 @@ void phase3_desktop_init(void) {
     // 2. Initialize Window Manager & Light Bloom Wallpaper Cache
     wm_init();
 
-    // 3. Pre-register core application windows (minimized to Dock on startup for clean desktop)
-    int win1_w = (width > 600) ? 540 : (width - 60);
-    int win1_h = 380;
+    // 3. Create 2 Windows matching reference image exactly:
+    // Window 1: File Manager (Left side, light theme)
+    int win1_w = (width > 600) ? 510 : (width - 60);
+    int win1_h = 360;
     int win1_x = 90;
     int win1_y = 52;
-    window_t* win1 = wm_create_window("File Manager", win1_x, win1_y, win1_w, win1_h,
-                                     render_file_manager_client, NULL);
 
-    int win2_w = (width > 600) ? 520 : (width - 60);
-    int win2_h = 360;
+    window_t* win1 = wm_create_window("File Manager", win1_x, win1_y, win1_w, win1_h,
+                                      render_file_manager_client, NULL);
+    if (win1) wm_close_window(win1); /* Dock launches/restores it; desktop starts clean. */
+
+    // Window 2: NSK Terminal (available from Dock, not opened at boot)
+    int win2_w = (width > 600) ? 480 : (width - 60);
+    int win2_h = 330;
     int win2_x = (width > 600) ? ((int)width - win2_w - 40) : 120;
-    int win2_y = 180;
+    int win2_y = 230;
+
     window_t* win2 = wm_create_window("NSK Terminal", win2_x, win2_y, win2_w, win2_h,
                                       render_terminal_client, NULL);
 
+    // Focus Terminal window so it's overlapping in front, exactly like the reference screenshot!
+    wm_focus_window(win2);
+
     kprintf("[NSK WM] Created Window 1: \"File Manager\" [Left]\n");
     kprintf("[NSK WM] Created Window 2: \"NSK Terminal\" [Overlapping Right]\n");
-
-    // Clean desktop on startup: windows are docked in the Dock, ready to open on click
-    if (win1) win1->is_minimized = true;
-    if (win2) win2->is_minimized = true;
-
-    kprintf("[NSK WM] Clean Desktop Initialized. Applications accessible via Dock and Shortcuts.\n");
     kprintf("[NSK WM] ==============================================================\n");
     kprintf("[NSK WM]       >>> PHASE 3 DESKTOP UI & WINDOW MANAGER ACTIVE <<<       \n");
-    kprintf("[NSK WM] Clean Desktop + Floating Dock + Top Bar + Responsive Windows   \n");
+    kprintf("[NSK WM] Reference UI + Dock + Top Menu Bar + High-Contrast Cursor [OK] \n");
     kprintf("[NSK WM] ==============================================================\n\n");
 
     // 4. Initial Render Pass
     wm_render();
 
-    // 4. Interactive Event Loop
+    // 5. Interactive Event Loop
     uint32_t last_tick = pit_get_ticks();
 
     while (1) {
@@ -313,7 +304,7 @@ void phase3_desktop_init(void) {
 
         last_tick = cur_tick;
 
-        // Process mouse events, window drag, resize, buttons
+        // Process mouse events, window drag, buttons
         wm_process_events();
 
         // Render updated desktop / fast cursor blit

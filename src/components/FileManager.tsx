@@ -1,743 +1,200 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-  ChevronLeft,
-  ChevronRight,
-  FolderPlus,
-  FilePlus,
-  RefreshCw,
-  Search,
-  Trash2,
-  Edit2,
-  FileText,
-  Image as ImageIcon,
-  Music,
-  Video,
-  Code,
-  File,
-  LayoutGrid,
-  List,
-  AlertTriangle,
+  ChevronLeft, ChevronRight, Home, Search, Minus, Square, X,
+  FileText, Image as ImageIcon, Music, Video, Download, Settings, Trash2,
+  FolderPlus, FilePlus2, RefreshCw, Pencil, Copy, Scissors, ClipboardPaste, Trash
 } from 'lucide-react';
-import folderArtwork from '../assets/file.jpeg';
-
-export interface FileItem {
-  name: string;
-  path: string;
-  type: 'folder' | 'file';
-  size: number;
-  extension: string;
-  modified: string;
-}
+import fileIcon from '../assets/file.jpeg';
 
 interface FileManagerProps {
-  initialPath?: string;
-  onOpenFile?: (file: FileItem) => void;
+  isOpen: boolean;
+  onClose: () => void;
+  onMinimize: () => void;
+  zIndex: number;
+  onFocus: () => void;
 }
 
-// Initial Factory Baseline
-const DEFAULT_FS: Record<string, { type: 'folder' | 'file'; size: number; modified: string; content?: string }> = {
-  '/home': { type: 'folder', size: 0, modified: '2026-10-02T10:00:00Z' },
-  '/home/Desktop': { type: 'folder', size: 0, modified: '2026-10-02T10:00:00Z' },
-  '/home/Documents': { type: 'folder', size: 0, modified: '2026-10-02T10:00:00Z' },
-  '/home/Downloads': { type: 'folder', size: 0, modified: '2026-10-02T10:00:00Z' },
-  '/home/Pictures': { type: 'folder', size: 0, modified: '2026-10-02T10:00:00Z' },
-  '/home/Music': { type: 'folder', size: 0, modified: '2026-10-02T10:00:00Z' },
-  '/home/Videos': { type: 'folder', size: 0, modified: '2026-10-02T10:00:00Z' },
-  '/home/Notes': { type: 'folder', size: 0, modified: '2026-10-02T10:00:00Z' },
-  '/home/Applications': { type: 'folder', size: 0, modified: '2026-10-02T10:00:00Z' },
-  '/home/Projects': { type: 'folder', size: 0, modified: '2026-10-02T10:00:00Z' },
-  '/home/Trash': { type: 'folder', size: 0, modified: '2026-10-02T10:00:00Z' },
-  // Baseline files
-  '/home/Documents/welcome_to_nsk.txt': {
-    type: 'file',
-    size: 248,
-    modified: '2026-10-02T10:00:00Z',
-    content: 'Welcome to NSK OS v0.3!\nA from-scratch 32-bit x86 Protected Mode operating system with custom kernel and glass desktop.',
-  },
-  '/home/Documents/kernel_specs_v0.3.md': {
-    type: 'file',
-    size: 512,
-    modified: '2026-10-02T10:00:00Z',
-    content: '# NSK OS v0.3 Kernel Architecture\n- Multiboot2 Specification\n- 5 GDT Segments\n- 256 IDT Gates\n- Bitmap Physical Memory Manager\n- Framebuffer 1536x1024 32bpp',
-  },
-  '/home/Documents/phase1_complete.log': {
-    type: 'file',
-    size: 180,
-    modified: '2026-10-02T10:00:00Z',
-    content: '[BOOT] Multiboot2 Header Verified: 0xE85250D6\n[INIT] PMM: 256 MB RAM\n[STATUS] Phase 1: Boot & Core Kernel COMPLETE',
-  },
-  '/home/Downloads/nsk-os-0.3.iso': {
-    type: 'file',
-    size: 8388608,
-    modified: '2026-10-02T10:00:00Z',
-    content: 'NSK-OS-BOOTABLE-ISO',
-  },
-  '/home/Notes/release_notes.txt': {
-    type: 'file',
-    size: 140,
-    modified: '2026-10-02T10:00:00Z',
-    content: 'NSK OS v0.3 Release Notes:\n- Clean bootable desktop without startup popups\n- Fully movable and resizable windows\n- Floating Dock with live indicators',
-  },
+type FSItem = {
+  name: string; path: string; type: 'folder'|'file'|'image'|'text';
+  size: number|null; modified: string;
 };
 
-export const FileManager: React.FC<FileManagerProps> = ({
-  initialPath = '/home',
-  onOpenFile,
-}) => {
-  const [currentPath, setCurrentPath] = useState(initialPath);
-  const [fsData, setFsData] = useState<Record<string, { type: 'folder' | 'file'; size: number; modified: string; content?: string }>>(() => {
-    try {
-      const stored = localStorage.getItem('nsk_fs_data');
-      return stored ? JSON.parse(stored) : DEFAULT_FS;
-    } catch {
-      return DEFAULT_FS;
-    }
-  });
+const factory = ['Desktop','Documents','Downloads','Pictures','Music','Videos','Notes','Applications','Projects','Trash'];
 
-  const saveFsData = (newData: typeof DEFAULT_FS) => {
-    setFsData(newData);
-    try {
-      localStorage.setItem('nsk_fs_data', JSON.stringify(newData));
-    } catch {
-      // pass
-    }
+export const FileManager: React.FC<FileManagerProps> = ({isOpen,onClose,onMinimize,zIndex,onFocus}) => {
+  const [pos,setPos]=useState({x:155,y:152});
+  const [size,setSize]=useState({w:633,h:409});
+  const [savedFrame,setSavedFrame]=useState({x:155,y:152,w:633,h:409});
+  const [isMaximized,setIsMaximized]=useState(false);
+  const [interaction,setInteraction]=useState<'drag'|'resize'|null>(null);
+  const [resizeEdges,setResizeEdges]=useState({left:false,right:false,top:false,bottom:false});
+  const [dragOffset,setDragOffset]=useState({x:0,y:0});
+  const [currentPath,setCurrentPath]=useState('/');
+  const [history,setHistory]=useState<string[]>(['/']);
+  const [historyIdx,setHistoryIdx]=useState(0);
+  const [items,setItems]=useState<FSItem[]>([]);
+  const [searchQuery,setSearchQuery]=useState('');
+  const [selected,setSelected]=useState<FSItem|null>(null);
+  const [clipboard,setClipboard]=useState<{path:string;mode:'copy'|'cut'}|null>(null);
+  const [status,setStatus]=useState('Loading filesystem…');
+
+  const loadDirectory=async(pathValue:string)=>{
+    try{
+      setStatus('Loading…');
+      const r=await fetch(`/api/fs/list?path=${encodeURIComponent(pathValue.replace(/^\/+/,''))}`);
+      const data=await r.json();
+      if(!r.ok) throw new Error(data.error || 'Filesystem unavailable');
+      setItems(data.items); setCurrentPath(data.path || '/'); setStatus(`${data.items.length} item(s)`);
+    }catch(e:any){ setItems([]); setStatus(e?.message || 'Filesystem unavailable'); }
   };
 
-  // History for navigation
-  const [history, setHistory] = useState<string[]>([initialPath]);
-  const [historyIndex, setHistoryIndex] = useState(0);
+  useEffect(()=>{ if(isOpen) loadDirectory(currentPath); },[isOpen]);
 
-  // Selection & UI state
-  const [selectedItem, setSelectedItem] = useState<FileItem | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const navigateTo=(p:string)=>{
+    const next=history.slice(0,historyIdx+1); next.push(p);
+    setHistory(next); setHistoryIdx(next.length-1); setSelected(null); loadDirectory(p);
+  };
+  const goBack=()=>{if(historyIdx>0){const i=historyIdx-1;setHistoryIdx(i);setSelected(null);loadDirectory(history[i]);}};
+  const goForward=()=>{if(historyIdx<history.length-1){const i=historyIdx+1;setHistoryIdx(i);setSelected(null);loadDirectory(history[i]);}};
 
-  // Modals
-  const [showNewFolderModal, setShowNewFolderModal] = useState(false);
-  const [newFolderName, setNewFolderName] = useState('');
-  const [showNewFileModal, setShowNewFileModal] = useState(false);
-  const [newFileName, setNewFileName] = useState('');
-  const [showRenameModal, setShowRenameModal] = useState(false);
-  const [renameValue, setRenameValue] = useState('');
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-
-  // Compute items in current directory
-  const currentItems: FileItem[] = useMemo(() => {
-    const cleanDir = currentPath.replace(/\/+$/, '') || '/home';
-    const result: FileItem[] = [];
-
-    for (const [pathKey, val] of Object.entries(fsData)) {
-      if (pathKey === cleanDir) continue;
-      const lastSlash = pathKey.lastIndexOf('/');
-      const parent = pathKey.substring(0, lastSlash) || '/';
-
-      if (parent === cleanDir) {
-        const name = pathKey.substring(lastSlash + 1);
-        const ext = val.type === 'file' ? (name.split('.').pop() || '') : '';
-        result.push({
-          name,
-          path: pathKey,
-          type: val.type,
-          size: val.size,
-          extension: ext.toLowerCase(),
-          modified: val.modified,
-        });
+  const beginDrag=(e:React.MouseEvent)=>{
+    if(isMaximized)return;
+    setInteraction('drag'); setDragOffset({x:e.clientX-pos.x,y:e.clientY-pos.y}); onFocus();
+  };
+  const beginResize=(e:React.MouseEvent, edge:'left'|'right'|'top'|'bottom'|'topleft'|'topright'|'bottomleft'|'bottomright')=>{
+    if(isMaximized)return; e.stopPropagation(); setInteraction('resize');
+    setResizeEdges({left:edge.includes('left'),right:edge.includes('right'),top:edge.includes('top'),bottom:edge.includes('bottom')});
+    setDragOffset({x:e.clientX,y:e.clientY}); onFocus();
+  };
+  useEffect(()=>{
+    if(!interaction)return;
+    const move=(e:MouseEvent)=>{
+      if(interaction==='drag'){
+        setPos({x:Math.max(0,Math.min(window.innerWidth-size.w,e.clientX-dragOffset.x)),
+          y:Math.max(36,Math.min(window.innerHeight-size.h-12,e.clientY-dragOffset.y))});
+      }else{
+        const dx=e.clientX-dragOffset.x,dy=e.clientY-dragOffset.y,minW=420,minH=260;
+        let {x,y}=pos,{w,h}=size;
+        if(resizeEdges.right)w=Math.max(minW,Math.min(window.innerWidth-x,w+dx));
+        if(resizeEdges.bottom)h=Math.max(minH,Math.min(window.innerHeight-y-12,h+dy));
+        if(resizeEdges.left){const nx=Math.max(0,Math.min(x+w-minW,x+dx));w+=x-nx;x=nx;}
+        if(resizeEdges.top){const ny=Math.max(36,Math.min(y+h-minH,y+dy));h+=y-ny;y=ny;}
+        setPos({x,y});setSize({w,h});setDragOffset({x:e.clientX,y:e.clientY});
       }
-    }
-
-    result.sort((a, b) => {
-      if (a.type !== b.type) return a.type === 'folder' ? -1 : 1;
-      return a.name.localeCompare(b.name);
-    });
-
-    return result;
-  }, [fsData, currentPath]);
-
-  // Navigate
-  const navigateTo = (newPath: string) => {
-    if (newPath === currentPath) return;
-    const newHist = history.slice(0, historyIndex + 1);
-    newHist.push(newPath);
-    setHistory(newHist);
-    setHistoryIndex(newHist.length - 1);
-    setCurrentPath(newPath);
-    setSelectedItem(null);
-  };
-
-  const handleBack = () => {
-    if (historyIndex > 0) {
-      const prev = historyIndex - 1;
-      setHistoryIndex(prev);
-      setCurrentPath(history[prev]);
-      setSelectedItem(null);
-    }
-  };
-
-  const handleForward = () => {
-    if (historyIndex < history.length - 1) {
-      const next = historyIndex + 1;
-      setHistoryIndex(next);
-      setCurrentPath(history[next]);
-      setSelectedItem(null);
-    }
-  };
-
-  // Actions
-  const handleCreateFolder = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newFolderName.trim()) return;
-    const newPath = `${currentPath.replace(/\/+$/, '')}/${newFolderName.trim()}`;
-    const updated = {
-      ...fsData,
-      [newPath]: { type: 'folder' as const, size: 0, modified: new Date().toISOString() },
     };
-    saveFsData(updated);
-    setShowNewFolderModal(false);
-    setNewFolderName('');
+    const up=()=>{setInteraction(null);setResizeEdges({left:false,right:false,top:false,bottom:false});};
+    window.addEventListener('mousemove',move);window.addEventListener('mouseup',up);
+    return()=>{window.removeEventListener('mousemove',move);window.removeEventListener('mouseup',up);};
+  },[interaction,dragOffset,pos,size,resizeEdges]);
+
+  const toggleMaximize=()=>{
+    if(isMaximized){setPos({x:savedFrame.x,y:savedFrame.y});setSize({w:savedFrame.w,h:savedFrame.h});setIsMaximized(false);}
+    else{setSavedFrame({...pos,...size});setPos({x:8,y:30});setSize({w:Math.max(420,window.innerWidth-16),h:Math.max(260,window.innerHeight-92)});setIsMaximized(true);}
+    onFocus();
   };
 
-  const handleCreateFile = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newFileName.trim()) return;
-    const newPath = `${currentPath.replace(/\/+$/, '')}/${newFileName.trim()}`;
-    const updated = {
-      ...fsData,
-      [newPath]: { type: 'file' as const, size: 0, modified: new Date().toISOString(), content: '' },
-    };
-    saveFsData(updated);
-    setShowNewFileModal(false);
-    setNewFileName('');
+  const request=async(endpoint:string,body:any)=>{
+    const r=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const data=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(data.error||'Filesystem operation failed');
+    await loadDirectory(currentPath);
   };
 
-  const handleRename = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedItem || !renameValue.trim()) return;
-    const lastSlash = selectedItem.path.lastIndexOf('/');
-    const parent = selectedItem.path.substring(0, lastSlash);
-    const newPath = `${parent}/${renameValue.trim()}`;
-
-    const updated = { ...fsData };
-    if (updated[selectedItem.path]) {
-      updated[newPath] = updated[selectedItem.path];
-      delete updated[selectedItem.path];
-      saveFsData(updated);
-    }
-    setShowRenameModal(false);
-    setSelectedItem(null);
+  const createFolder=async()=>{
+    const name=window.prompt('New folder name:','New Folder'); if(!name)return;
+    try{await request('/api/fs/mkdir',{path:`${currentPath}/${name}`.replace('//','/')});}catch(e:any){window.alert(e.message);}
+  };
+  const createFile=async()=>{
+    const name=window.prompt('New file name:','New File.txt'); if(!name)return;
+    try{await request('/api/fs/touch',{path:`${currentPath}/${name}`.replace('//','/')});}catch(e:any){window.alert(e.message);}
+  };
+  const rename=async()=>{
+    if(!selected)return; const name=window.prompt('Rename:',selected.name); if(!name||name===selected.name)return;
+    try{await request('/api/fs/rename',{from:selected.path,to:`${currentPath}/${name}`.replace('//','/')});setSelected(null);}catch(e:any){window.alert(e.message);}
+  };
+  const remove=async()=>{
+    if(!selected)return;
+    if(!window.confirm(`Delete "${selected.name}"?`))return;
+    try{await request('/api/fs/delete',{path:selected.path});setSelected(null);}catch(e:any){window.alert(e.message);}
+  };
+  const paste=async()=>{
+    if(!clipboard)return;
+    const target=`${currentPath}/${clipboard.path.split('/').pop()}`.replace('//','/');
+    try{
+      await request(clipboard.mode==='copy'?'/api/fs/copy':'/api/fs/move',{from:clipboard.path,to:target});
+      setClipboard(null);
+    }catch(e:any){window.alert(e.message);}
+  };
+  const openItem=(item:FSItem)=>{
+    if(item.type==='folder'){navigateTo(item.path);return;}
+    if(item.type==='image'||item.type==='text') window.open(`/api/fs/raw?path=${encodeURIComponent(item.path.replace(/^\\//,''))}`,'_blank','noopener,noreferrer');
+    else window.alert(`No NSK application is registered for "${item.name}".`);
   };
 
-  const handleDelete = () => {
-    if (!selectedItem) return;
-    const updated = { ...fsData };
-    delete updated[selectedItem.path];
-    saveFsData(updated);
-    setShowDeleteConfirm(false);
-    setSelectedItem(null);
-  };
+  const filtered=useMemo(()=>items.filter(i=>i.name.toLowerCase().includes(searchQuery.toLowerCase())),[items,searchQuery]);
+  const side=[{name:'Home',path:'/',icon:Home},{name:'Documents',path:'/Documents',icon:FileText},{name:'Pictures',path:'/Pictures',icon:ImageIcon},{name:'Music',path:'/Music',icon:Music},{name:'Videos',path:'/Videos',icon:Video},{name:'Downloads',path:'/Downloads',icon:Download},{name:'Settings',path:'/Applications',icon:Settings}];
 
-  const formatSize = (bytes: number): string => {
-    if (bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-  };
-
-  const formatDate = (dateStr: string): string => {
-    try {
-      const d = new Date(dateStr);
-      return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-    } catch {
-      return dateStr;
-    }
-  };
-
-  // Helper for file type icons
-  const renderFileIcon = (item: FileItem) => {
-    const ext = item.extension.toLowerCase();
-    if (['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'].includes(ext)) {
-      return (
-        <div className="w-11 h-11 rounded-xl bg-purple-50 border border-purple-200 flex items-center justify-center text-purple-600 shadow-2xs">
-          <ImageIcon className="w-6 h-6 stroke-[1.8]" />
-        </div>
-      );
-    }
-    if (['mp3', 'wav', 'ogg', 'm4a'].includes(ext)) {
-      return (
-        <div className="w-11 h-11 rounded-xl bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-600 shadow-2xs">
-          <Music className="w-6 h-6 stroke-[1.8]" />
-        </div>
-      );
-    }
-    if (['mp4', 'mkv', 'webm'].includes(ext)) {
-      return (
-        <div className="w-11 h-11 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 shadow-2xs">
-          <Video className="w-6 h-6 stroke-[1.8]" />
-        </div>
-      );
-    }
-    if (['c', 'h', 'asm', 'ts', 'js', 'json', 'py', 'sh'].includes(ext)) {
-      return (
-        <div className="w-11 h-11 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600 shadow-2xs">
-          <Code className="w-6 h-6 stroke-[1.8]" />
-        </div>
-      );
-    }
-    if (['txt', 'md', 'log'].includes(ext)) {
-      return (
-        <div className="w-11 h-11 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600 shadow-2xs">
-          <FileText className="w-6 h-6 stroke-[1.8]" />
-        </div>
-      );
-    }
-    return (
-      <div className="w-11 h-11 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-500 shadow-2xs">
-        <File className="w-6 h-6 stroke-[1.8]" />
+  if(!isOpen)return null;
+  return <div style={{left:pos.x,top:pos.y,width:size.w,height:size.h,zIndex}} onClick={onFocus}
+    className="absolute bg-white/92 backdrop-blur-2xl border border-white/80 shadow-2xl rounded-xl flex flex-col overflow-hidden select-none">
+    <div onMouseDown={beginDrag} className="h-9 px-4 flex items-center justify-between border-b border-slate-200/70 bg-gradient-to-b from-white/90 to-white/60 cursor-move">
+      <div className="flex items-center gap-2">
+        <button onClick={e=>{e.stopPropagation();onClose();}} className="w-3 h-3 rounded-full bg-[#FF5F56] flex items-center justify-center"><X className="w-2 h-2 opacity-0 group-hover:opacity-100"/></button>
+        <button onClick={e=>{e.stopPropagation();onMinimize();}} className="w-3 h-3 rounded-full bg-[#FFBD2E] flex items-center justify-center"><Minus className="w-2 h-2 opacity-0"/></button>
+        <button onClick={e=>{e.stopPropagation();toggleMaximize();}} className="w-3 h-3 rounded-full bg-[#27C93F]"/>
       </div>
-    );
-  };
-
-  // Filter items by search
-  const filteredItems = useMemo(() => {
-    if (!searchQuery.trim()) return currentItems;
-    return currentItems.filter(i => i.name.toLowerCase().includes(searchQuery.toLowerCase()));
-  }, [currentItems, searchQuery]);
-
-  // Sidebar Shortcuts (all factory folders use the authentic file.jpeg artwork)
-  const sidebarShortcuts = [
-    { name: 'Home', path: '/home' },
-    { name: 'Desktop', path: '/home/Desktop' },
-    { name: 'Documents', path: '/home/Documents' },
-    { name: 'Downloads', path: '/home/Downloads' },
-    { name: 'Pictures', path: '/home/Pictures' },
-    { name: 'Music', path: '/home/Music' },
-    { name: 'Videos', path: '/home/Videos' },
-    { name: 'Notes', path: '/home/Notes' },
-    { name: 'Applications', path: '/home/Applications' },
-    { name: 'Projects', path: '/home/Projects' },
-    { name: 'Trash', path: '/home/Trash' },
-  ];
-
-  return (
-    <div className="flex-1 flex flex-col h-full bg-slate-50/50 text-slate-800 text-xs overflow-hidden select-none">
-      {/* Top Toolbar */}
-      <div className="h-10 px-3 flex items-center justify-between border-b border-slate-200/80 bg-white/70 backdrop-blur-md shrink-0 gap-2">
-        <div className="flex items-center gap-1">
-          <button
-            onClick={handleBack}
-            disabled={historyIndex === 0}
-            title="Back"
-            className="p-1.5 rounded-lg hover:bg-slate-200/70 disabled:opacity-30 disabled:pointer-events-none transition-colors text-slate-600"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          <button
-            onClick={handleForward}
-            disabled={historyIndex >= history.length - 1}
-            title="Forward"
-            className="p-1.5 rounded-lg hover:bg-slate-200/70 disabled:opacity-30 disabled:pointer-events-none transition-colors text-slate-600"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* Address / Path Bar */}
-        <div className="flex-1 max-w-[320px] h-7 bg-white/90 border border-slate-200 rounded-lg px-2.5 flex items-center gap-1.5 text-xs text-slate-700 shadow-2xs font-mono overflow-x-auto whitespace-nowrap">
-          <img src={folderArtwork} alt="Path Root" className="w-3.5 h-3.5 object-contain" />
-          <span className="font-sans font-medium text-slate-700">{currentPath}</span>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex items-center gap-1 border-l border-r border-slate-200/80 px-2">
-          <button
-            onClick={() => {
-              setNewFolderName('');
-              setShowNewFolderModal(true);
-            }}
-            title="New Folder"
-            className="p-1.5 rounded-lg hover:bg-blue-50 text-slate-700 hover:text-blue-600 transition-colors flex items-center gap-1"
-          >
-            <FolderPlus className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline text-[11px] font-medium">New Folder</span>
-          </button>
-
-          <button
-            onClick={() => {
-              setNewFileName('');
-              setShowNewFileModal(true);
-            }}
-            title="New File"
-            className="p-1.5 rounded-lg hover:bg-blue-50 text-slate-700 hover:text-blue-600 transition-colors flex items-center gap-1"
-          >
-            <FilePlus className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline text-[11px] font-medium">New File</span>
-          </button>
-
-          {selectedItem && (
-            <>
-              <button
-                onClick={() => {
-                  setRenameValue(selectedItem.name);
-                  setShowRenameModal(true);
-                }}
-                title="Rename Item"
-                className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600 hover:text-slate-800 transition-colors"
-              >
-                <Edit2 className="w-3.5 h-3.5" />
-              </button>
-
-              <button
-                onClick={() => setShowDeleteConfirm(true)}
-                title="Delete Item"
-                className="p-1.5 rounded-lg hover:bg-rose-50 text-rose-600 transition-colors"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-            </>
-          )}
-
-          <button
-            onClick={() => {
-              const stored = localStorage.getItem('nsk_fs_data');
-              if (stored) setFsData(JSON.parse(stored));
-            }}
-            title="Refresh"
-            className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600 hover:text-slate-800 transition-colors"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-          </button>
-        </div>
-
-        {/* Search & View Mode */}
-        <div className="flex items-center gap-2">
-          <div className="w-36 lg:w-44 h-7 bg-white/90 border border-slate-200 rounded-lg px-2 flex items-center gap-1.5 text-xs text-slate-500 shadow-2xs">
-            <Search className="w-3 h-3 text-slate-400 shrink-0" />
-            <input
-              type="text"
-              placeholder="Search..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-transparent border-none outline-none text-xs text-slate-800 placeholder:text-slate-400"
-            />
-          </div>
-
-          <div className="flex items-center bg-slate-200/70 p-0.5 rounded-md">
-            <button
-              onClick={() => setViewMode('grid')}
-              className={`p-1 rounded ${viewMode === 'grid' ? 'bg-white text-slate-800 shadow-2xs' : 'text-slate-500'}`}
-              title="Grid View"
-            >
-              <LayoutGrid className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => setViewMode('list')}
-              className={`p-1 rounded ${viewMode === 'list' ? 'bg-white text-slate-800 shadow-2xs' : 'text-slate-500'}`}
-              title="List View"
-            >
-              <List className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
+      <span className="text-[13px] font-semibold text-slate-700">File Manager</span>
+      <div className="flex items-center gap-3 text-slate-500">
+        <button onClick={e=>{e.stopPropagation();onMinimize();}}><Minus className="w-3.5 h-3.5"/></button>
+        <button onClick={e=>{e.stopPropagation();toggleMaximize();}}><Square className="w-3 h-3"/></button>
+        <button onClick={e=>{e.stopPropagation();onClose();}}><X className="w-3.5 h-3.5"/></button>
       </div>
-
-      {/* Main Workspace (Sidebar + Explorer) */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Left Sidebar: Standard Factory Folders using real file.jpeg icon */}
-        <div className="w-44 border-r border-slate-200/80 bg-white/40 p-2 space-y-0.5 overflow-y-auto shrink-0">
-          <div className="px-2 py-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-            Favorites
-          </div>
-          {sidebarShortcuts.map((item) => {
-            const isSelected = currentPath === item.path;
-            return (
-              <button
-                key={item.path}
-                onClick={() => navigateTo(item.path)}
-                className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                  isSelected
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'text-slate-700 hover:bg-slate-200/50'
-                }`}
-              >
-                {/* Authentic scaled file.jpeg folder artwork */}
-                <img
-                  src={folderArtwork}
-                  alt="Folder"
-                  className="w-4 h-4 object-contain shrink-0"
-                />
-                <span className="truncate">{item.name}</span>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Right Content Area */}
-        <div
-          onClick={() => setSelectedItem(null)}
-          className="flex-1 p-4 overflow-y-auto relative bg-white/30"
-        >
-          {filteredItems.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-slate-400">
-              <img src={folderArtwork} alt="Empty Folder" className="w-14 h-14 object-contain opacity-40 mb-2" />
-              <p className="text-sm font-medium">This folder is empty</p>
-              <p className="text-xs text-slate-400 mt-1">Use "New Folder" or "New File" above</p>
-            </div>
-          ) : viewMode === 'grid' ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-              {filteredItems.map((item) => {
-                const isSelected = selectedItem?.path === item.path;
-                return (
-                  <div
-                    key={item.path}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedItem(item);
-                    }}
-                    onDoubleClick={(e) => {
-                      e.stopPropagation();
-                      if (item.type === 'folder') {
-                        navigateTo(item.path);
-                      } else {
-                        onOpenFile?.(item);
-                      }
-                    }}
-                    className={`flex flex-col items-center p-3 rounded-xl cursor-pointer transition-all border ${
-                      isSelected
-                        ? 'bg-blue-500/15 border-blue-400/50 shadow-xs'
-                        : 'border-transparent hover:bg-slate-100/60 hover:border-slate-200/60'
-                    }`}
-                  >
-                    <div className="w-12 h-12 flex items-center justify-center mb-2">
-                      {item.type === 'folder' ? (
-                        <img
-                          src={folderArtwork}
-                          alt={item.name}
-                          draggable={false}
-                          className="w-12 h-12 object-contain drop-shadow-2xs select-none hover:scale-105 transition-transform"
-                        />
-                      ) : (
-                        renderFileIcon(item)
-                      )}
-                    </div>
-                    <span
-                      title={item.name}
-                      className={`text-xs font-medium text-center line-clamp-2 px-1 rounded break-all leading-tight ${
-                        isSelected ? 'text-blue-900 font-semibold' : 'text-slate-800'
-                      }`}
-                    >
-                      {item.name}
-                    </span>
-                    <span className="text-[10px] text-slate-400 mt-1">
-                      {item.type === 'folder' ? 'Folder' : formatSize(item.size)}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="w-full bg-white/70 rounded-xl border border-slate-200 overflow-hidden shadow-2xs">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50/70 text-slate-500 font-medium">
-                    <th className="py-2 px-3">Name</th>
-                    <th className="py-2 px-3 w-28">Type</th>
-                    <th className="py-2 px-3 w-24">Size</th>
-                    <th className="py-2 px-3 w-36">Date Modified</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredItems.map((item) => {
-                    const isSelected = selectedItem?.path === item.path;
-                    return (
-                      <tr
-                        key={item.path}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedItem(item);
-                        }}
-                        onDoubleClick={(e) => {
-                          e.stopPropagation();
-                          if (item.type === 'folder') {
-                            navigateTo(item.path);
-                          } else {
-                            onOpenFile?.(item);
-                          }
-                        }}
-                        className={`border-b border-slate-100 hover:bg-blue-50/50 cursor-pointer ${
-                          isSelected ? 'bg-blue-500/15' : ''
-                        }`}
-                      >
-                        <td className="py-2 px-3 flex items-center gap-2">
-                          {item.type === 'folder' ? (
-                            <img src={folderArtwork} alt="Folder" className="w-4 h-4 object-contain" />
-                          ) : (
-                            <File className="w-4 h-4 text-slate-400" />
-                          )}
-                          <span className="font-medium text-slate-800">{item.name}</span>
-                        </td>
-                        <td className="py-2 px-3 text-slate-500 uppercase">
-                          {item.type === 'folder' ? 'Folder' : item.extension || 'File'}
-                        </td>
-                        <td className="py-2 px-3 text-slate-500 font-mono">
-                          {item.type === 'folder' ? '--' : formatSize(item.size)}
-                        </td>
-                        <td className="py-2 px-3 text-slate-400">
-                          {formatDate(item.modified)}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Bottom Status Bar */}
-      <div className="h-6 px-3 border-t border-slate-200/80 bg-white/60 flex items-center justify-between text-[11px] text-slate-500 shrink-0">
-        <span>{filteredItems.length} items</span>
-        {selectedItem ? (
-          <span className="truncate max-w-xs font-mono">
-            Selected: {selectedItem.name} ({selectedItem.type === 'folder' ? 'Folder' : formatSize(selectedItem.size)})
-          </span>
-        ) : (
-          <span>NSK OS Filesystem</span>
-        )}
-      </div>
-
-      {/* New Folder Modal */}
-      {showNewFolderModal && (
-        <div className="absolute inset-0 bg-black/20 backdrop-blur-2xs flex items-center justify-center z-50 p-4">
-          <form
-            onSubmit={handleCreateFolder}
-            className="bg-white rounded-xl shadow-2xl border border-white/80 p-5 max-w-sm w-full"
-          >
-            <h4 className="font-semibold text-slate-800 text-sm mb-3">Create New Folder</h4>
-            <input
-              type="text"
-              autoFocus
-              placeholder="Folder name"
-              value={newFolderName}
-              onChange={(e) => setNewFolderName(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs outline-none focus:border-blue-500 mb-4"
-            />
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setShowNewFolderModal(false)}
-                className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-3 py-1.5 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-500"
-              >
-                Create
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* New File Modal */}
-      {showNewFileModal && (
-        <div className="absolute inset-0 bg-black/20 backdrop-blur-2xs flex items-center justify-center z-50 p-4">
-          <form
-            onSubmit={handleCreateFile}
-            className="bg-white rounded-xl shadow-2xl border border-white/80 p-5 max-w-sm w-full"
-          >
-            <h4 className="font-semibold text-slate-800 text-sm mb-3">Create New File</h4>
-            <input
-              type="text"
-              autoFocus
-              placeholder="Filename (e.g. notes.txt)"
-              value={newFileName}
-              onChange={(e) => setNewFileName(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs outline-none focus:border-blue-500 mb-4"
-            />
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setShowNewFileModal(false)}
-                className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-3 py-1.5 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-500"
-              >
-                Create
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* Rename Modal */}
-      {showRenameModal && selectedItem && (
-        <div className="absolute inset-0 bg-black/20 backdrop-blur-2xs flex items-center justify-center z-50 p-4">
-          <form
-            onSubmit={handleRename}
-            className="bg-white rounded-xl shadow-2xl border border-white/80 p-5 max-w-sm w-full"
-          >
-            <h4 className="font-semibold text-slate-800 text-sm mb-3">Rename "{selectedItem.name}"</h4>
-            <input
-              type="text"
-              autoFocus
-              value={renameValue}
-              onChange={(e) => setRenameValue(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs outline-none focus:border-blue-500 mb-4"
-            />
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setShowRenameModal(false)}
-                className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-3 py-1.5 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-500"
-              >
-                Rename
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* Delete Confirmation */}
-      {showDeleteConfirm && selectedItem && (
-        <div className="absolute inset-0 bg-black/20 backdrop-blur-2xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl border border-white/80 p-5 max-w-sm w-full">
-            <h4 className="font-semibold text-slate-800 text-sm mb-2 flex items-center gap-2 text-rose-600">
-              <Trash2 className="w-4 h-4" />
-              Delete {selectedItem.type}?
-            </h4>
-            <p className="text-slate-600 text-xs mb-4">
-              Are you sure you want to delete <strong className="text-slate-800">{selectedItem.name}</strong>?
-            </p>
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setShowDeleteConfirm(false)}
-                className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDelete}
-                className="px-3 py-1.5 rounded-lg bg-rose-600 text-white font-medium hover:bg-rose-500"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
-  );
+    <div className="h-10 px-4 flex items-center gap-2 border-b border-slate-200/60 bg-white/40">
+      <button onClick={goBack} disabled={historyIdx===0} className="p-1 rounded hover:bg-slate-200/60 disabled:opacity-40"><ChevronLeft className="w-4 h-4"/></button>
+      <button onClick={goForward} disabled={historyIdx>=history.length-1} className="p-1 rounded hover:bg-slate-200/60 disabled:opacity-40"><ChevronRight className="w-4 h-4"/></button>
+      <button onClick={()=>loadDirectory(currentPath)} title="Refresh" className="p-1 rounded hover:bg-slate-200/60"><RefreshCw className="w-4 h-4"/></button>
+      <button onClick={createFolder} title="New Folder" className="p-1 rounded hover:bg-slate-200/60"><FolderPlus className="w-4 h-4"/></button>
+      <button onClick={createFile} title="New File" className="p-1 rounded hover:bg-slate-200/60"><FilePlus2 className="w-4 h-4"/></button>
+      <button onClick={rename} disabled={!selected} title="Rename" className="p-1 rounded hover:bg-slate-200/60 disabled:opacity-30"><Pencil className="w-4 h-4"/></button>
+      <button onClick={()=>selected&&setClipboard({path:selected.path,mode:'copy'})} disabled={!selected} title="Copy" className="p-1 rounded hover:bg-slate-200/60 disabled:opacity-30"><Copy className="w-4 h-4"/></button>
+      <button onClick={()=>selected&&setClipboard({path:selected.path,mode:'cut'})} disabled={!selected} title="Cut" className="p-1 rounded hover:bg-slate-200/60 disabled:opacity-30"><Scissors className="w-4 h-4"/></button>
+      <button onClick={paste} disabled={!clipboard} title="Paste" className="p-1 rounded hover:bg-slate-200/60 disabled:opacity-30"><ClipboardPaste className="w-4 h-4"/></button>
+      <button onClick={remove} disabled={!selected} title="Delete" className="p-1 rounded hover:bg-slate-200/60 disabled:opacity-30"><Trash className="w-4 h-4"/></button>
+      <div className="flex-1 h-7 bg-white/80 border border-slate-200/80 rounded-md px-2.5 flex items-center gap-2 text-xs text-slate-700">
+        <Home className="w-3.5 h-3.5 text-blue-600"/><span className="font-medium">{currentPath}</span>
+      </div>
+      <div className="w-[180px] h-7 bg-white/80 border border-slate-200/80 rounded-md px-2.5 flex items-center gap-2 text-xs text-slate-500">
+        <Search className="w-3.5 h-3.5 text-slate-400"/><input value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} placeholder="Search files..." className="w-full bg-transparent outline-none text-xs"/>
+      </div>
+    </div>
+    <div className="flex-1 flex overflow-hidden">
+      <div className="w-[146px] border-r border-slate-200/60 p-2 space-y-1 bg-white/30 text-xs">
+        {side.map(({name,path,icon:Icon})=><button key={name} onClick={()=>navigateTo(path)} className={`w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-medium ${currentPath===path?'bg-[#5BA0F2] text-white':'text-slate-700 hover:bg-black/5'}`}><Icon className="w-3.5 h-3.5"/><span>{name}</span></button>)}
+      </div>
+      <div className="flex-1 p-5 overflow-auto">
+        {filtered.length===0?<div className="h-full flex items-center justify-center text-xs text-slate-400">{status}</div>:
+        <div className="grid grid-cols-4 gap-5">
+          {filtered.map(item=><div key={item.path} onClick={()=>setSelected(item)} onDoubleClick={()=>openItem(item)}
+            className={`flex flex-col items-center p-2 rounded-lg cursor-pointer ${selected?.path===item.path?'bg-blue-500/15 ring-1 ring-blue-400/40':'hover:bg-blue-500/10'}`}>
+            {item.type==='folder' ? <img src={fileIcon} alt="" draggable={false} className="w-12 h-12 object-contain"/>
+              : item.type==='image' ? <ImageIcon className="w-10 h-10 text-blue-500"/>
+              : item.type==='text' ? <FileText className="w-10 h-10 text-slate-500"/>
+              : item.name.toLowerCase().includes('music') ? <Music className="w-10 h-10 text-rose-500"/>
+              : <FileText className="w-10 h-10 text-slate-500"/>}
+            <span className="mt-2 text-xs font-medium text-slate-800 text-center truncate max-w-[110px]">{item.name}</span>
+            <span className="text-[10px] text-slate-400">{item.type==='folder'?'Folder':`${item.size ?? 0} B`}</span>
+          </div>)}
+        </div>}
+      </div>
+    </div>
+    <div onMouseDown={e=>beginResize(e,'left')} className="absolute left-0 top-3 bottom-3 w-1 cursor-ew-resize"/>
+    <div onMouseDown={e=>beginResize(e,'right')} className="absolute right-0 top-3 bottom-3 w-1 cursor-ew-resize"/>
+    <div onMouseDown={e=>beginResize(e,'top')} className="absolute top-0 left-3 right-3 h-1 cursor-ns-resize"/>
+    <div onMouseDown={e=>beginResize(e,'bottom')} className="absolute bottom-0 left-3 right-3 h-1 cursor-ns-resize"/>
+    <div onMouseDown={e=>beginResize(e,'topleft')} className="absolute left-0 top-0 w-3 h-3 cursor-nwse-resize"/>
+    <div onMouseDown={e=>beginResize(e,'topright')} className="absolute right-0 top-0 w-3 h-3 cursor-nesw-resize"/>
+    <div onMouseDown={e=>beginResize(e,'bottomleft')} className="absolute left-0 bottom-0 w-3 h-3 cursor-nesw-resize"/>
+    <div onMouseDown={e=>beginResize(e,'bottomright')} className="absolute right-0 bottom-0 w-3 h-3 cursor-nwse-resize"/>
+  </div>;
 };

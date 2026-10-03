@@ -10,7 +10,10 @@
 
 #define WM_MAX_WINDOWS      16
 #define WM_TITLEBAR_HEIGHT  34
+#define WM_TOPBAR_HEIGHT    28
 #define WM_TASKBAR_HEIGHT   46
+#define WM_MIN_WINDOW_W     220
+#define WM_MIN_WINDOW_H     150
 
 struct window;
 typedef struct window window_t;
@@ -36,6 +39,8 @@ struct window {
     bool is_closed;
     bool is_focused;
     bool is_dragging;
+    bool is_resizing;
+    int  resize_edges;
     int  z_index;
     window_render_fn render_client;
     window_click_fn  on_click;
@@ -50,7 +55,6 @@ void      wm_focus_window(window_t* win);
 void      wm_close_window(window_t* win);
 void      wm_minimize_window(window_t* win);
 void      wm_restore_window(window_t* win);
-window_t* wm_find_window_by_title(const char* title);
 
 // Interaction & Rendering
 void      wm_process_events(void);

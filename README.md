@@ -187,3 +187,27 @@ python3 tools/gen_dock_icons.py --preview /tmp/dock_icons_preview.png   # needs 
 
 Dock items are bound to windows **by title** (see `dock_items[]` in `kernel/wm.c`), so a window created with
 `wm_create_window("Notes", ...)` automatically gets its Dock dot, minimize-to-Dock and click-to-restore.
+
+## Real filesystem desktop mode
+
+The existing React desktop now talks to `server.js` for actual filesystem I/O. No demo directory entries are hard-coded into the File Manager.
+
+Run the desktop server after building the frontend:
+
+```bash
+npm install
+npm run build
+NSK_FS_ROOT=/home/nsk npm start
+```
+
+`NSK_FS_ROOT` is the sandbox boundary. All File Manager operations are restricted to that directory. On first server start the factory directories are created if missing:
+
+`Desktop Documents Downloads Pictures Music Videos Notes Applications Projects Trash`
+
+For development, you can point it at any dedicated test directory:
+
+```bash
+NSK_FS_ROOT="$HOME/NSK-OS-Home" npm start
+```
+
+Delete sends user files/folders to the real `Trash` directory; items already inside `Trash` are permanently removed. Symbolic-link entries are not followed by directory listing, and API paths are rejected if they escape the configured filesystem root.

@@ -1,5 +1,8 @@
 import React from 'react';
 import { Terminal, Trash2 } from 'lucide-react';
+
+// The 8 app icons are the original artwork (assets/dock_icons/*.jpeg) with only the white backdrop cut to
+// transparency and size/padding normalised - see tools/gen_dock_icons.py. They are never recoloured.
 import filesIcon from '../assets/dock-icons/files.png';
 import browserIcon from '../assets/dock-icons/browser.png';
 import photosIcon from '../assets/dock-icons/photos.png';
@@ -10,102 +13,94 @@ import calculatorIcon from '../assets/dock-icons/calculator.png';
 import settingsIcon from '../assets/dock-icons/settings.png';
 
 interface DockProps {
-  onDockClick: (appId: string) => void;
+  onOpenApp: (appName: string) => void;
   openApps: Record<string, boolean>;
-  minimizedApps: Record<string, boolean>;
-  activeAppId: string | null;
 }
 
-interface DockItem {
+interface DockApp {
   id: string;
   name: string;
+  isRunning: boolean;
   renderIcon: () => React.ReactNode;
 }
 
-export const Dock: React.FC<DockProps> = ({
-  onDockClick,
-  openApps,
-  activeAppId,
-}) => {
+export const Dock: React.FC<DockProps> = ({ onOpenApp, openApps }) => {
   const imageIcon = (src: string, alt: string) => () => (
-    <img
-      src={src}
-      alt={alt}
-      draggable={false}
-      className="w-13 h-13 object-contain select-none filter drop-shadow-sm transition-transform duration-200"
-    />
+    <img src={src} alt={alt} draggable={false} className="w-14 h-14 select-none" />
   );
 
-  // Strictly in the order requested by user:
-  // File Manager, Browser, Photos, Calendar, Notes, Clock, Calculator, Settings, Terminal, Trash
-  const dockApps: DockItem[] = [
-    { id: 'files',      name: 'File Manager', renderIcon: imageIcon(filesIcon, 'File Manager') },
-    { id: 'browser',    name: 'Browser',      renderIcon: imageIcon(browserIcon, 'Browser') },
-    { id: 'photos',     name: 'Photos',       renderIcon: imageIcon(photosIcon, 'Photos') },
-    { id: 'calendar',   name: 'Calendar',     renderIcon: imageIcon(calendarIcon, 'Calendar') },
-    { id: 'notes',      name: 'Notes',        renderIcon: imageIcon(notesIcon, 'Notes') },
-    { id: 'clock',      name: 'Clock',        renderIcon: imageIcon(clockIcon, 'Clock') },
-    { id: 'calculator', name: 'Calculator',   renderIcon: imageIcon(calculatorIcon, 'Calculator') },
-    { id: 'settings',   name: 'Settings',     renderIcon: imageIcon(settingsIcon, 'Settings') },
+  const dockApps: DockApp[] = [
+    { id: 'files',      name: 'File Manager', isRunning: openApps.files || false,    renderIcon: imageIcon(filesIcon, 'File Manager') },
+    { id: 'browser',    name: 'Browser',      isRunning: false,                       renderIcon: imageIcon(browserIcon, 'Browser') },
+    { id: 'photos',     name: 'Photos',       isRunning: openApps.photos || false,   renderIcon: imageIcon(photosIcon, 'Photos') },
+    { id: 'calendar',   name: 'Calendar',     isRunning: false,                       renderIcon: imageIcon(calendarIcon, 'Calendar') },
+    { id: 'notes',      name: 'Notes',        isRunning: false,                       renderIcon: imageIcon(notesIcon, 'Notes') },
+    { id: 'clock',      name: 'Clock',        isRunning: false,                       renderIcon: imageIcon(clockIcon, 'Clock') },
+    { id: 'calculator', name: 'Calculator',   isRunning: false,                       renderIcon: imageIcon(calculatorIcon, 'Calculator') },
+    { id: 'settings',   name: 'Settings',     isRunning: openApps.settings || false, renderIcon: imageIcon(settingsIcon, 'Settings') }
+  ];
+
+  // Existing items that are not part of the 8 app icons stay to the right of a separator
+  const extraApps: DockApp[] = [
     {
       id: 'terminal',
       name: 'Terminal',
+      isRunning: openApps.terminal || false,
       renderIcon: () => (
-        <div className="w-12 h-12 rounded-[14px] bg-gradient-to-b from-slate-800 to-slate-950 border border-slate-700/80 shadow-md flex items-center justify-center text-white">
+        <div className="w-12 h-12 rounded-[13px] bg-gradient-to-b from-slate-800 to-slate-900 border border-slate-700 shadow-md flex items-center justify-center text-white">
           <Terminal className="w-6 h-6 stroke-[2]" />
         </div>
-      ),
+      )
     },
     {
       id: 'trash',
       name: 'Trash',
+      isRunning: false,
       renderIcon: () => (
-        <div className="w-12 h-12 rounded-[14px] bg-white/80 backdrop-blur-md border border-white/90 shadow-md flex items-center justify-center text-slate-600">
+        <div className="w-12 h-12 rounded-[13px] bg-white/70 backdrop-blur-md border border-white/80 shadow-md flex items-center justify-center text-slate-500">
           <Trash2 className="w-6 h-6 stroke-[1.8]" />
         </div>
-      ),
-    },
+      )
+    }
   ];
 
-  return (
-    <div className="fixed bottom-3 left-1/2 -translate-x-1/2 z-40 select-none">
-      <div className="bg-white/60 hover:bg-white/70 backdrop-blur-2xl border border-white/75 shadow-2xl rounded-[26px] px-3.5 py-2 flex items-end gap-2.5 transition-all duration-300">
-        {dockApps.map((app) => {
-          const isRunning = openApps[app.id] || false;
-          const isActive = activeAppId === app.id;
-
-          return (
-            <div
-              key={app.id}
-              onClick={() => onDockClick(app.id)}
-              className="relative flex flex-col items-center cursor-pointer group pb-1"
-            >
-              {/* Tooltip on hover */}
-              <div className="absolute -top-9 opacity-0 group-hover:opacity-100 transition-all duration-150 transform group-hover:-translate-y-1 bg-slate-900/85 text-white text-[11px] font-medium py-1 px-2.5 rounded-lg backdrop-blur-md whitespace-nowrap shadow-lg pointer-events-none z-50">
-                {app.name}
-              </div>
-
-              {/* Icon Container with smooth hover bounce/lift */}
-              <div className="w-12 h-12 sm:w-13 sm:h-13 flex items-center justify-center transform transition-all duration-200 ease-out group-hover:-translate-y-2 group-hover:scale-115">
-                {app.renderIcon()}
-              </div>
-
-              {/* Running Indicator Dot */}
-              <div className="h-1 flex items-center justify-center mt-1">
-                {isRunning ? (
-                  <div
-                    className={`w-1.5 h-1.5 rounded-full shadow-xs transition-all ${
-                      isActive ? 'bg-blue-600 scale-120' : 'bg-slate-700/80'
-                    }`}
-                  />
-                ) : (
-                  <div className="w-1.5 h-1.5 opacity-0" />
-                )}
-              </div>
-            </div>
-          );
-        })}
+  const renderItem = (app: DockApp) => (
+    <div
+      key={app.id}
+      onClick={() => onOpenApp(app.id)}
+      className="relative flex flex-col items-center cursor-pointer group"
+    >
+      <div className="w-14 h-14 flex items-center justify-center transform transition-all duration-200 ease-out group-hover:-translate-y-2 group-hover:scale-110">
+        {app.renderIcon()}
       </div>
+
+      {/* Running App Indicator Dot */}
+      <div className="h-1.5 flex items-center justify-center mt-0.5">
+        {app.isRunning && <div className="w-1.5 h-1.5 rounded-full bg-slate-800 shadow-xs" />}
+      </div>
+
+      {/* Tooltip */}
+      <div className="absolute -top-10 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-800/90 text-white text-[11px] font-medium py-1 px-2.5 rounded-md backdrop-blur-xs whitespace-nowrap shadow-md pointer-events-none">
+        {app.name}
+      </div>
+    </div>
+  );
+
+  return (
+    <div
+      style={{
+        left: '402px',
+        top: '920px',
+        width: '732px',
+        height: '83px'
+      }}
+      className="absolute bg-white/65 backdrop-blur-2xl border border-white/70 shadow-2xl rounded-[28px] px-6 flex items-center justify-center gap-2 select-none z-40 transition-all hover:bg-white/75"
+    >
+      {dockApps.map(renderItem)}
+
+      <div className="w-px h-9 bg-slate-500/25 mx-2 self-center -mt-1.5" />
+
+      {extraApps.map(renderItem)}
     </div>
   );
 };
